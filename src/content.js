@@ -1,4 +1,7 @@
 (() => {
+  if (window.__wuepInitialized) return;
+  window.__wuepInitialized = true;
+
   const STORAGE_KEY = 'wuep_filters_v1';
   const PANEL_ID = 'wuep-panel';
 
@@ -8,9 +11,15 @@
   };
 
   const state = { ...DEFAULT_STATE };
+  let observer = null;
+  let scheduled = false;
 
   function getRows() {
     return Array.from(document.querySelectorAll('app-schedule-row'));
+  }
+
+  function getVisibleRows() {
+    return getRows().filter((row) => row.offsetParent !== null || row.classList.contains('wuep-row-hidden'));
   }
 
   function normalizeText(value) {
@@ -31,6 +40,8 @@
     return /face to face/i.test(title) ? 'face' : 'havefun';
   }
 
+  // NOTE: This heuristic is temporary and intentionally conservative.
+  // A data-driven implementation can replace this when payload fields are confirmed.
   function inferDeliveryMode(title) {
     return /\(L\d{2}-\d{2}\)/i.test(title) ? 'live' : 'school';
   }
@@ -48,15 +59,16 @@
     return classTypeMatch && deliveryMatch;
   }
 
-  function applyFilters() {
+  function applyFiltersNow() {
     const rows = getRows();
-    let visible = 0;
+    if (!rows.length) return;
 
-    rows.forEach((row) => {
+    let visible = 0;
+    for (const row of rows) {
       const keep = rowMatches(row);
       row.classList.toggle('wuep-row-hidden', !keep);
       if (keep) visible += 1;
-    });
+    }
 
     const status = document.querySelector('#wuep-status');
     if (status) {
@@ -64,11 +76,24 @@
     }
   }
 
+  function scheduleApply() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      try {
+        applyFiltersNow();
+      } catch (error) {
+        console.error('[WUEP] apply failed:', error);
+      }
+    });
+  }
+
   function saveState() {
     try {
       chrome.storage.sync.set({ [STORAGE_KEY]: state });
-    } catch (_) {
-      // no-op
+    } catch {
+      // no-op in restricted contexts
     }
   }
 
@@ -76,7 +101,7 @@
     Object.assign(state, partial);
     saveState();
     syncControls();
-    applyFilters();
+    scheduleApply();
   }
 
   function syncControls() {
@@ -160,25 +185,50 @@
     });
 
     panel.querySelector('#wuep-refresh').addEventListener('click', () => {
-      applyFilters();
+      scheduleApply();
     });
 
     document.body.appendChild(panel);
     syncControls();
-    applyFilters();
+    scheduleApply();
   }
 
-  function observeChanges() {
-    const root = document.querySelector('main') || document.body;
-    const observer = new MutationObserver(() => {
-      if (!document.getElementById(PANEL_ID)) return;
-      applyFilters();
+  function resolveObserveTarget() {
+    return (
+      document.querySelector('app-home-box') ||
+      document.querySelector('main') ||
+      document.body
+    );
+  }
+
+  function startObserver() {
+    if (observer) observer.disconnect();
+
+    const target = resolveObserveTarget();
+    observer = new MutationObserver((mutations) => {
+      // Re-apply only when nodes are added/removed; ignore pure text churn.
+      const shouldReapply = mutations.some((m) => m.type === 'childList');
+      if (shouldReapply) scheduleApply();
     });
 
-    observer.observe(root, {
+    observer.observe(target, {
       childList: true,
       subtree: true
     });
+  }
+
+  function ensureReadyAndInit(attempt = 0) {
+    const rows = getVisibleRows();
+    const maxAttempts = 40; // ~10s
+
+    if (!rows.length && attempt < maxAttempts) {
+      setTimeout(() => ensureReadyAndInit(attempt + 1), 250);
+      return;
+    }
+
+    buildPanel();
+    startObserver();
+    scheduleApply();
   }
 
   function loadStateAndInit() {
@@ -189,12 +239,10 @@
           if (['all', 'face', 'havefun'].includes(saved.classType)) state.classType = saved.classType;
           if (['all', 'school', 'live'].includes(saved.delivery)) state.delivery = saved.delivery;
         }
-        buildPanel();
-        observeChanges();
+        ensureReadyAndInit();
       });
-    } catch (_) {
-      buildPanel();
-      observeChanges();
+    } catch {
+      ensureReadyAndInit();
     }
   }
 
