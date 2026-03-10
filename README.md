@@ -31,18 +31,22 @@ This version uses a **client-side filtering layer** on top of the base schedule 
 
 ### Classification logic currently implemented
 
-The extension currently infers class metadata from row titles:
+Class Type detection:
 
 - `Face to Face` if title includes `Face to Face`
 - Otherwise class type is treated as `Have Fun`
-- Delivery mode is currently inferred from title pattern and may not always match the platform's canonical `School/Live` labeling.
 
-This behavior is documented here so users understand current filtering behavior.
+Delivery detection (`School` / `Live`):
+
+- The extension calibrates icon mapping from the native filters (`School` and `Live`).
+- It stores icon IDs and then classifies each row by icon, not by title.
+- Calibration is cached and refreshed automatically when stale.
 ## Features
 
 - Floating filter panel inside eCampus
 - Multi-filter combinations with valid group constraints
 - Real-time row filtering
+- Automatic icon calibration for `School` / `Live`
 - Lightweight refresh action
 - Persistent filter preferences using `chrome.storage.sync`
 
