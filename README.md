@@ -29,17 +29,15 @@ This version uses a **client-side filtering layer** on top of the base schedule 
 - It only shows/hides existing class rows.
 - It keeps the original eCampus UI and actions intact.
 
-### Classification logic used in MVP
+### Classification logic currently implemented
 
-Because the platform does not expose a documented multi-filter endpoint, this MVP infers class metadata from row titles:
+The extension currently infers class metadata from row titles:
 
 - `Face to Face` if title includes `Face to Face`
 - Otherwise class type is treated as `Have Fun`
-- `Live` if title includes pattern like `(L07-12)`
-- Otherwise delivery is treated as `School`
+- Delivery mode is currently inferred from title pattern and may not always match the platform's canonical `School/Live` labeling.
 
-> Note: this heuristic is intentionally simple for v1. We can move to a data-driven strategy in v2 if needed.
-
+This behavior is documented here so users understand current filtering behavior.
 ## Features
 
 - Floating filter panel inside eCampus
