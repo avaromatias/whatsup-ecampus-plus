@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "What's Up! eCampus Plus",
+  "version": "0.1.0",
+  "description": "Adds multi-filter support to the eCampus Schedule a Class screen.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ecampus.whatsup.es/Api/ScheduleAClass*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "css": [
+        "src/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage"
+  ]
+}

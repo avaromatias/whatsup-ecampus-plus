@@ -1,0 +1,124 @@
+:root {
+  --wuep-bg: #111827;
+  --wuep-panel: rgba(17, 24, 39, 0.96);
+  --wuep-border: rgba(255, 255, 255, 0.14);
+  --wuep-text: #f9fafb;
+  --wuep-muted: #cbd5e1;
+  --wuep-accent: #60a5fa;
+  --wuep-badge: #1f2937;
+}
+
+#wuep-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(320px, calc(100vw - 32px));
+  z-index: 2147483647;
+  background: var(--wuep-panel);
+  color: var(--wuep-text);
+  border: 1px solid var(--wuep-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+#wuep-panel * {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.wuep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--wuep-border);
+}
+
+.wuep-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.wuep-chip {
+  font-size: 11px;
+  color: var(--wuep-muted);
+  border: 1px solid var(--wuep-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.wuep-body {
+  padding: 10px 12px 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.wuep-section {
+  display: grid;
+  gap: 6px;
+}
+
+.wuep-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--wuep-muted);
+}
+
+.wuep-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--wuep-text);
+}
+
+.wuep-option input {
+  accent-color: var(--wuep-accent);
+}
+
+.wuep-divider {
+  height: 1px;
+  background: var(--wuep-border);
+}
+
+.wuep-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--wuep-border);
+  padding: 8px 12px;
+}
+
+.wuep-status {
+  font-size: 12px;
+  color: var(--wuep-muted);
+}
+
+.wuep-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.wuep-btn {
+  border: 1px solid var(--wuep-border);
+  background: var(--wuep-badge);
+  color: var(--wuep-text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.wuep-btn:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.wuep-row-hidden {
+  display: none !important;
+}
