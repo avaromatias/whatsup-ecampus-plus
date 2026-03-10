@@ -36,17 +36,20 @@ Class Type detection:
 - `Face to Face` if title includes `Face to Face`
 - Otherwise class type is treated as `Have Fun`
 
-Delivery detection (`School` / `Live`):
+Delivery handling (`School` / `Live`):
 
-- The extension calibrates icon mapping from the native filters (`School` and `Live`).
-- It stores icon IDs and then classifies each row by icon, not by title.
-- Calibration is cached and refreshed automatically when stale.
+- Delivery mode uses native eCampus routes:
+  - `ScheduleAClass` (all)
+  - `ScheduleAClassSchool`
+  - `ScheduleAClassLive`
+- The extension navigates between those routes when delivery filter changes.
+- Class Type filtering (`Face to Face` / `Have Fun`) is applied client-side on top of the selected delivery page.
 ## Features
 
 - Floating filter panel inside eCampus
 - Multi-filter combinations with valid group constraints
 - Real-time row filtering
-- Automatic icon calibration for `School` / `Live`
+- Native route-based `School` / `Live` delivery switching
 - Lightweight refresh action
 - Persistent filter preferences using `chrome.storage.sync`
 
