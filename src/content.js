@@ -470,16 +470,24 @@
 
     const viewportPadding = 8;
     const rect = trigger.getBoundingClientRect();
+
+    // If trigger is out of viewport, close panel so it does not stay floating.
+    const triggerOffscreen = rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth;
+    if (triggerOffscreen) {
+      closePanel();
+      return;
+    }
+
     const maxWidth = Math.max(220, window.innerWidth - viewportPadding * 2);
     panel.style.width = `${Math.min(260, maxWidth)}px`;
 
     const panelRect = panel.getBoundingClientRect();
-    let left = rect.right - panelRect.width + window.scrollX;
-    const minLeft = window.scrollX + viewportPadding;
-    const maxLeft = window.scrollX + window.innerWidth - panelRect.width - viewportPadding;
+    let left = rect.right - panelRect.width;
+    const minLeft = viewportPadding;
+    const maxLeft = window.innerWidth - panelRect.width - viewportPadding;
     left = Math.min(Math.max(left, minLeft), Math.max(minLeft, maxLeft));
 
-    const top = rect.bottom + 8 + window.scrollY;
+    const top = rect.bottom + 8;
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
   }
@@ -591,6 +599,9 @@
     window.addEventListener('resize', () => {
       if (state.open) positionPanel();
     });
+    window.addEventListener('scroll', () => {
+      if (state.open) positionPanel();
+    }, true);
 
     if (chrome?.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {

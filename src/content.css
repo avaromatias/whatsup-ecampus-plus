@@ -48,7 +48,7 @@
 }
 
 #wuep-panel {
-  position: absolute;
+  position: fixed;
   z-index: 2147483647;
   width: 260px;
   background: var(--wuep-bg);
