@@ -3,6 +3,7 @@
   --wuep-border: #d8dee9;
   --wuep-text: #1f2937;
   --wuep-muted: #6b7280;
+  --wuep-accent: #5dadbc;
   --wuep-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
 }
 
@@ -108,13 +109,35 @@
   gap: 8px;
 }
 
+.wuep-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
 .wuep-section-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--wuep-muted);
-  margin-bottom: 2px;
+}
+
+.wuep-reset-mini {
+  border: none;
+  background: transparent;
+  color: var(--wuep-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.wuep-reset-mini[hidden] {
+  display: none !important;
 }
 
 .wuep-days {
@@ -142,9 +165,9 @@
 }
 
 .wuep-day.wuep-day-active {
-  border-color: #2f6df6;
-  color: #2f6df6;
-  background: #eef4ff;
+  border-color: var(--wuep-accent);
+  color: var(--wuep-accent);
+  background: #eef8fa;
 }
 
 .wuep-range-label {
@@ -171,15 +194,28 @@
   margin: 0;
 }
 
+.wuep-range-wrap input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #d7dee8;
+  border-radius: 999px;
+}
+
+.wuep-range-wrap input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: #d7dee8;
+  border-radius: 999px;
+}
+
 .wuep-range-wrap input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   pointer-events: all;
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #2f6df6;
+  background: var(--wuep-accent);
   border: 2px solid #fff;
-  box-shadow: 0 0 0 1px rgba(47, 109, 246, 0.35);
+  margin-top: -5px;
+  box-shadow: 0 0 0 1px rgba(93, 173, 188, 0.45);
 }
 
 .wuep-range-wrap input[type="range"]::-moz-range-thumb {
@@ -187,7 +223,7 @@
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #2f6df6;
+  background: var(--wuep-accent);
   border: 2px solid #fff;
 }
 
@@ -201,7 +237,7 @@
 }
 
 .wuep-option input {
-  accent-color: #2f6df6;
+  accent-color: var(--wuep-accent);
 }
 
 .wuep-footer {

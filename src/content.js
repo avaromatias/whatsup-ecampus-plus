@@ -32,6 +32,9 @@
   let observer = null;
   let scheduled = false;
   let lastPath = location.pathname;
+  let lastStatusText = '';
+  let lastRangeText = '';
+  let lastAppliedSignature = '';
 
   const isSchedulePage = () => /\/Api\/ScheduleAClass(?:School|Live|Ff|Hf)?$/i.test(location.pathname);
 
@@ -130,15 +133,21 @@
 
   function updateStatus(nativeRows) {
     const status = document.querySelector('#wuep-status');
-    if (!status) return;
+    const rangeLabel = document.querySelector('#wuep-range-label');
 
     const rows = nativeRows || getRows().filter(isNativeVisible);
     const visible = rows.filter((row) => !row.classList.contains('wuep-row-hidden')).length;
-    status.textContent = `${visible} visible / ${rows.length} total`;
 
-    const rangeLabel = document.querySelector('#wuep-range-label');
-    if (rangeLabel) {
-      rangeLabel.textContent = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
+    const statusText = `${visible} visible / ${rows.length} total`;
+    if (status && statusText !== lastStatusText) {
+      status.textContent = statusText;
+      lastStatusText = statusText;
+    }
+
+    const rangeText = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
+    if (rangeLabel && rangeText !== lastRangeText) {
+      rangeLabel.textContent = rangeText;
+      lastRangeText = rangeText;
     }
   }
 
@@ -154,6 +163,20 @@
       return;
     }
 
+    const signature = [
+      state.classType,
+      state.selectedDays.join(','),
+      state.timeStart,
+      state.timeEnd,
+      location.pathname,
+      allRows.length
+    ].join('|');
+
+    if (signature === lastAppliedSignature) {
+      updateStatus();
+      return;
+    }
+
     allRows.forEach((row) => row.classList.remove('wuep-row-hidden'));
     const nativeRows = allRows.filter(isNativeVisible);
 
@@ -163,6 +186,7 @@
     });
 
     updateStatus(nativeRows);
+    lastAppliedSignature = signature;
   }
 
   function scheduleApply() {
@@ -204,10 +228,19 @@
       state.timeEnd = tmp;
     }
 
+    lastAppliedSignature = '';
     saveState();
     syncControls();
     renderEnabledState();
     scheduleApply();
+  }
+
+  function isDaysDefault() {
+    return state.selectedDays.length === DAY_ORDER.length && DAY_ORDER.every((d) => state.selectedDays.includes(d));
+  }
+
+  function isTimeDefault() {
+    return state.timeStart === MIN_MINUTES && state.timeEnd === MAX_MINUTES;
   }
 
   function syncControls() {
@@ -227,8 +260,17 @@
     if (startInput) startInput.value = String(state.timeStart);
     if (endInput) endInput.value = String(state.timeEnd);
 
+    const resetDays = document.querySelector('#wuep-reset-days');
+    const resetTime = document.querySelector('#wuep-reset-time');
+    if (resetDays) resetDays.hidden = isDaysDefault();
+    if (resetTime) resetTime.hidden = isTimeDefault();
+
     const rangeLabel = document.querySelector('#wuep-range-label');
-    if (rangeLabel) rangeLabel.textContent = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
+    const rangeText = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
+    if (rangeLabel && rangeText !== lastRangeText) {
+      rangeLabel.textContent = rangeText;
+      lastRangeText = rangeText;
+    }
   }
 
   function createClassTypeRadio(value, label) {
@@ -291,15 +333,23 @@
       </div>
       <div class="wuep-body">
         <section>
-          <div class="wuep-section-label">Class Type</div>
+          <div class="wuep-section-head">
+            <div class="wuep-section-label">Class Type</div>
+          </div>
           <div id="wuep-class-type"></div>
         </section>
         <section>
-          <div class="wuep-section-label">Days</div>
+          <div class="wuep-section-head">
+            <div class="wuep-section-label">Days</div>
+            <button id="wuep-reset-days" class="wuep-reset-mini" type="button" hidden>RESET</button>
+          </div>
           <div id="wuep-days" class="wuep-days"></div>
         </section>
         <section>
-          <div class="wuep-section-label">Time Range</div>
+          <div class="wuep-section-head">
+            <div class="wuep-section-label">Time Range</div>
+            <button id="wuep-reset-time" class="wuep-reset-mini" type="button" hidden>RESET</button>
+          </div>
           <div class="wuep-range-wrap">
             <input id="wuep-time-start" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
             <input id="wuep-time-end" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
@@ -321,6 +371,14 @@
     DAY_ORDER.forEach((d) => days.append(createDayToggle(d)));
 
     panel.querySelector('#wuep-close').addEventListener('click', () => closePanel());
+
+    panel.querySelector('#wuep-reset-days').addEventListener('click', () => {
+      setState({ selectedDays: [...DAY_ORDER] });
+    });
+
+    panel.querySelector('#wuep-reset-time').addEventListener('click', () => {
+      setState({ timeStart: MIN_MINUTES, timeEnd: MAX_MINUTES });
+    });
 
     const startInput = panel.querySelector('#wuep-time-start');
     const endInput = panel.querySelector('#wuep-time-end');
@@ -478,10 +536,22 @@
   function startObserver() {
     if (observer) observer.disconnect();
 
+    let mountQueued = false;
     observer = new MutationObserver((mutations) => {
-      const shouldReact = mutations.some((m) => m.type === 'childList');
-      if (!shouldReact) return;
-      mountScheduleUI();
+      const shouldReact = mutations.some((m) => {
+        if (m.type !== 'childList') return false;
+        const target = m.target;
+        if (!(target instanceof Element)) return false;
+        if (target.closest(`#${PANEL_ID}`) || target.closest('.wuep-anchor')) return false;
+        return true;
+      });
+
+      if (!shouldReact || mountQueued) return;
+      mountQueued = true;
+      requestAnimationFrame(() => {
+        mountQueued = false;
+        mountScheduleUI();
+      });
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
