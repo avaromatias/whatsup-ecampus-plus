@@ -599,9 +599,16 @@
     window.addEventListener('resize', () => {
       if (state.open) positionPanel();
     });
-    window.addEventListener('scroll', () => {
-      if (state.open) positionPanel();
-    }, true);
+
+    // In eCampus, scrolling can happen in internal containers.
+    // Close panel on any scroll-like interaction to avoid sticky floating behavior.
+    const closeOnScrollLike = () => {
+      if (state.open) closePanel();
+    };
+
+    window.addEventListener('scroll', closeOnScrollLike, true);
+    window.addEventListener('wheel', closeOnScrollLike, { capture: true, passive: true });
+    window.addEventListener('touchmove', closeOnScrollLike, { capture: true, passive: true });
 
     if (chrome?.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {
