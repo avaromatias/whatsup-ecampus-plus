@@ -49,10 +49,8 @@
 
 #wuep-panel {
   position: absolute;
-  z-index: 1000;
+  z-index: 2147483647;
   width: 260px;
-  right: 0;
-  top: calc(100% + 8px);
   background: var(--wuep-bg);
   color: var(--wuep-text);
   border: 1px solid var(--wuep-border);

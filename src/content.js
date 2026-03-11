@@ -454,9 +454,6 @@
 
     if (trigger.parentElement !== anchor) anchor.appendChild(trigger);
 
-    const panel = document.getElementById(PANEL_ID);
-    if (panel && panel.parentElement !== anchor) anchor.appendChild(panel);
-
     return trigger;
   }
 
@@ -467,12 +464,33 @@
     };
   }
 
+  function positionPanel() {
+    const { panel, trigger } = panelAndTrigger();
+    if (!panel || !trigger || panel.hidden) return;
+
+    const viewportPadding = 8;
+    const rect = trigger.getBoundingClientRect();
+    const maxWidth = Math.max(220, window.innerWidth - viewportPadding * 2);
+    panel.style.width = `${Math.min(260, maxWidth)}px`;
+
+    const panelRect = panel.getBoundingClientRect();
+    let left = rect.right - panelRect.width + window.scrollX;
+    const minLeft = window.scrollX + viewportPadding;
+    const maxLeft = window.scrollX + window.innerWidth - panelRect.width - viewportPadding;
+    left = Math.min(Math.max(left, minLeft), Math.max(minLeft, maxLeft));
+
+    const top = rect.bottom + 8 + window.scrollY;
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+  }
+
   function openPanel() {
     const { panel, trigger } = panelAndTrigger();
     if (!panel || !trigger) return;
     panel.hidden = false;
     trigger.classList.add('wuep-open');
     state.open = true;
+    positionPanel();
   }
 
   function closePanel() {
@@ -531,6 +549,7 @@
     buildPanel();
     buildTrigger();
     renderEnabledState();
+    if (state.open) positionPanel();
     scheduleApply();
   }
 
@@ -569,6 +588,9 @@
 
   function attachGlobalListeners() {
     document.addEventListener('click', handleOutsideClick, true);
+    window.addEventListener('resize', () => {
+      if (state.open) positionPanel();
+    });
 
     if (chrome?.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {

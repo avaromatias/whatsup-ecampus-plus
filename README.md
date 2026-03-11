@@ -92,6 +92,3 @@ Class type is inferred from row title:
 - No button auto-clicking.
 - Row visibility changes only.
 
-## License
-
-MIT
