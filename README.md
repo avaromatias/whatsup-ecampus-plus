@@ -15,12 +15,13 @@ By default, only one server-side filter can be applied at a time.
 
 ## Goal
 
-Allow students to combine filters in a way that matches business logic:
+Improve class discovery with a reliable local **Class Type** filter layer:
 
-- Class Type: `Face to Face` **or** `Have Fun`
-- Delivery: `School` **or** `Live`
-- Final view: any valid combination across both groups (e.g. `Face to Face + School`)
+- `Face to Face`
+- `Have Fun`
+- `All`
 
+Delivery mode (`School` / `Live`) is handled with the native eCampus filters.
 ## Current approach (MVP)
 
 This version uses a **client-side filtering layer** on top of the base schedule page.
@@ -38,18 +39,14 @@ Class Type detection:
 
 Delivery handling (`School` / `Live`):
 
-- Delivery mode uses native eCampus routes:
-  - `ScheduleAClass` (all)
-  - `ScheduleAClassSchool`
-  - `ScheduleAClassLive`
-- The extension navigates between those routes when delivery filter changes.
-- Class Type filtering (`Face to Face` / `Have Fun`) is applied client-side on top of the selected delivery page.
+- Delivery mode is not overridden by this extension.
+- Use native eCampus `School` / `Live` filters as usual.
+- The extension applies only `Class Type` filtering on top of the current native delivery view.
 ## Features
 
 - Floating filter panel inside eCampus
-- Multi-filter combinations with valid group constraints
+- Class Type filtering (`All` / `Face to Face` / `Have Fun`)
 - Real-time row filtering
-- Native route-based `School` / `Live` delivery switching
 - Lightweight refresh action
 - Persistent filter preferences using `chrome.storage.sync`
 
