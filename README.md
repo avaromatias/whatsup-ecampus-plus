@@ -1,18 +1,17 @@
 # What's Up! eCampus Plus
 
-Chrome extension that enhances the **Schedule a class** experience in What's Up! eCampus.
+Chrome extension that improves class discovery in the **Schedule a class** view of What's Up! eCampus.
 
-## Problem
+## Quick start
 
-The native schedule screen includes class-type filters (`Face to Face`, `Have Fun`) that can conflict with custom UI overlays and make advanced UX iteration harder.
+1. Clone this repository.
+2. Open `chrome://extensions`.
+3. Enable **Developer mode**.
+4. Click **Load unpacked** and select this project folder.
+5. Open:
+   - `https://ecampus.whatsup.es/Api/ScheduleAClass`
 
-## Goal
-
-Provide a compact, modern, and intuitive filter layer while preserving native scheduling behavior.
-
-## Current behavior
-
-### Scope
+## Scope
 
 The extension UI is injected only on:
 
@@ -20,69 +19,40 @@ The extension UI is injected only on:
 - `/Api/ScheduleAClassSchool`
 - `/Api/ScheduleAClassLive`
 
-### What the extension does
+## What it does
 
-- Adds a compact **funnel icon trigger** next to native filter controls.
-- Opens a compact panel with:
-  - Class type (`All` / `Face to Face` / `Have Fun`)
-  - Day selection (`MON` to `SAT`)
-  - Time range slider (`09:30` to `21:30` by default)
-- Keeps panel collapsed by default.
-- Closes panel when:
-  - user clicks outside, or
-  - user clicks the close button (`×`) in the panel.
-- The panel is anchored to the filter toolbar (it does not stay fixed on viewport scroll).
-- Hides native `Face to Face` / `Have Fun` controls to avoid duplicated filter sources.
-- Leaves native `School` / `Live` controls untouched.
-- Applies filtering only to rows that are natively visible in the current schedule view.
+- Adds a compact filter trigger near native schedule filters.
+- Opens a filter panel with:
+  - Class Type (`All`, `Face to Face`, `Have Fun`)
+  - Days (`MON` to `SAT`)
+  - Time Range (`09:30` to `21:30`, default full range)
+- Applies client-side filtering to natively visible schedule rows.
+- Keeps native delivery filters (`School`, `Live`) as the source of truth.
+- Provides a popup toggle (**Enable on this site**) for runtime on/off.
 
-### What the extension does NOT do
+## Filter model
 
-- It does not schedule classes.
-- It does not cancel classes.
-- It does not modify native `School` / `Live` logic.
+| Dimension | Managed by | Options |
+|---|---|---|
+| Delivery | Native eCampus | School / Live |
+| Class Type | Extension | All / Face to Face / Have Fun |
+| Days | Extension | MON / TUE / WED / THU / FRI / SAT |
+| Time Range | Extension | 09:30–21:30 |
 
-## Extension popup (runtime toggle)
-
-Click the extension icon in Chrome toolbar to open the popup.
-
-Available control:
-
-- **Enable on this site**
-  - ON: apply eCampus Plus DOM enhancements.
-  - OFF: disable enhancements and show native view immediately.
-
-## Classification logic
+## Classification rule
 
 Class type is inferred from row title:
 
-- If title contains `Face to Face` → `Face to Face`
-- Otherwise → `Have Fun`
+- Title contains `Face to Face` -> `Face to Face`
+- Otherwise -> `Have Fun`
 
-## Features
-
-- Compact, modern filter UI integrated near native controls.
-- Collapsed-by-default interaction.
-- Real-time class-type filtering.
-- Accurate counters based on natively visible rows.
-- Runtime enable/disable toggle from extension popup.
-- Filter preference persistence with `chrome.storage.sync`.
-
-## Tech stack
+## Architecture
 
 - Manifest V3
-- Vanilla JavaScript content script + popup
-- No build step required
-
-## Installation (developer mode)
-
-1. Clone this repository.
-2. Open Chrome and go to `chrome://extensions`.
-3. Enable **Developer mode**.
-4. Click **Load unpacked**.
-5. Select this project folder.
-6. Open eCampus schedule page:
-   - `https://ecampus.whatsup.es/Api/ScheduleAClass`
+- Content script (`src/content.js`)
+- Content styles (`src/content.css`)
+- Popup UI (`popup.html`, `popup.css`, `popup.js`)
+- Persistence via `chrome.storage.sync`
 
 ## Project structure
 
@@ -98,11 +68,29 @@ Class type is inferred from row title:
     └── content.js
 ```
 
-## Safety guardrails
+## Troubleshooting
 
-- No auto-clicking booking buttons.
-- No schedule/cancel triggers.
-- Client-side row visibility only.
+- **Trigger not visible**
+  - Ensure you are on one of the supported `/Api/ScheduleAClass*` routes.
+  - Reload extension from `chrome://extensions`.
+
+- **Filters do not update**
+  - Toggle extension OFF/ON from popup.
+  - Refresh the eCampus page.
+
+- **Unexpected behavior after updates**
+  - Reload extension and hard refresh the tab.
+
+## Limitations
+
+- Class type detection depends on title text.
+- DOM changes in eCampus may require selector updates.
+
+## Safety
+
+- No schedule/cancel automation.
+- No button auto-clicking.
+- Row visibility changes only.
 
 ## License
 
