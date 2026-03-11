@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>eCampus Plus</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <h1>What's Up! eCampus Plus</h1>
+      </header>
+
+      <section class="toggle-row">
+        <div>
+          <strong>Enable on this site</strong>
+          <p>Toggle DOM enhancements in real time.</p>
+        </div>
+        <label class="switch">
+          <input id="enabled" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </section>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,59 +1,76 @@
 # What's Up! eCampus Plus
 
-Chrome extension that adds **multi-filter scheduling** to the "Schedule a class" screen in What's Up! eCampus.
+Chrome extension that enhances the **Schedule a class** experience in What's Up! eCampus.
 
 ## Problem
 
-The native eCampus scheduling screen exposes four filters:
-
-- Face to Face
-- Have Fun
-- School
-- Live
-
-By default, only one server-side filter can be applied at a time.
+The native schedule screen includes class-type filters (`Face to Face`, `Have Fun`) that can conflict with custom UI overlays and make advanced UX iteration harder.
 
 ## Goal
 
-Improve class discovery with a reliable local **Class Type** filter layer:
+Provide a compact, modern, and intuitive class-type filter layer while preserving native scheduling behavior.
 
-- `Face to Face`
-- `Have Fun`
-- `All`
+## Current behavior
 
-Delivery mode (`School` / `Live`) is handled with the native eCampus filters.
-## Current approach (MVP)
+### Scope
 
-This version uses a **client-side filtering layer** on top of the base schedule page.
+The extension UI is injected only on:
 
-- It does **not** schedule or cancel classes.
-- It only shows/hides existing class rows.
-- It keeps the original eCampus UI and actions intact.
+- `/Api/ScheduleAClass`
+- `/Api/ScheduleAClassSchool`
+- `/Api/ScheduleAClassLive`
 
-### Classification logic currently implemented
+### What the extension does
 
-Class Type detection:
+- Adds a compact **funnel icon trigger** next to native filter controls.
+- Opens a small floating panel with class-type options:
+  - `All`
+  - `Face to Face`
+  - `Have Fun`
+- Keeps panel collapsed by default.
+- Closes panel when:
+  - user clicks outside, or
+  - user clicks the close button (`×`) in the panel.
+- Hides native `Face to Face` / `Have Fun` controls to avoid duplicated filter sources.
+- Leaves native `School` / `Live` controls untouched.
+- Applies filtering only to rows that are natively visible in the current schedule view.
 
-- `Face to Face` if title includes `Face to Face`
-- Otherwise class type is treated as `Have Fun`
+### What the extension does NOT do
 
-Delivery handling (`School` / `Live`):
+- It does not schedule classes.
+- It does not cancel classes.
+- It does not modify native `School` / `Live` logic.
 
-- Delivery mode is not overridden by this extension.
-- Use native eCampus `School` / `Live` filters as usual.
-- The extension applies only `Class Type` filtering on top of the current native delivery view.
+## Extension popup (runtime toggle)
+
+Click the extension icon in Chrome toolbar to open the popup.
+
+Available control:
+
+- **Enable on this site**
+  - ON: apply eCampus Plus DOM enhancements.
+  - OFF: disable enhancements and show native view immediately.
+
+## Classification logic
+
+Class type is inferred from row title:
+
+- If title contains `Face to Face` → `Face to Face`
+- Otherwise → `Have Fun`
+
 ## Features
 
-- Floating filter panel inside eCampus
-- Class Type filtering (`All` / `Face to Face` / `Have Fun`)
-- Real-time row filtering
-- Lightweight refresh action
-- Persistent filter preferences using `chrome.storage.sync`
+- Compact, modern filter UI integrated near native controls.
+- Collapsed-by-default interaction.
+- Real-time class-type filtering.
+- Accurate counters based on natively visible rows.
+- Runtime enable/disable toggle from extension popup.
+- Filter preference persistence with `chrome.storage.sync`.
 
 ## Tech stack
 
 - Manifest V3
-- Vanilla JavaScript content script
+- Vanilla JavaScript content script + popup
 - No build step required
 
 ## Installation (developer mode)
@@ -71,6 +88,9 @@ Delivery handling (`School` / `Live`):
 ```text
 .
 ├── manifest.json
+├── popup.html
+├── popup.css
+├── popup.js
 ├── README.md
 └── src
     ├── content.css
@@ -79,17 +99,9 @@ Delivery handling (`School` / `Live`):
 
 ## Safety guardrails
 
-- This extension does not auto-click booking buttons.
-- This extension does not trigger schedule/cancel actions.
-- It only modifies row visibility (`display: none`) on the client.
-
-## Roadmap
-
-- Better type/delivery detection via API payloads (optional)
-- Optional compact mode for schedule cards
-- Time-range and day filters
-- Saved presets
-- Toggle between native and enhanced filtering
+- No auto-clicking booking buttons.
+- No schedule/cancel triggers.
+- Client-side row visibility only.
 
 ## License
 

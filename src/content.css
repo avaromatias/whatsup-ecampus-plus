@@ -1,26 +1,52 @@
 :root {
-  --wuep-bg: #111827;
-  --wuep-panel: rgba(17, 24, 39, 0.96);
-  --wuep-border: rgba(255, 255, 255, 0.14);
-  --wuep-text: #f9fafb;
-  --wuep-muted: #cbd5e1;
-  --wuep-accent: #60a5fa;
-  --wuep-badge: #1f2937;
+  --wuep-bg: #ffffff;
+  --wuep-border: rgba(17, 24, 39, 0.14);
+  --wuep-text: #111827;
+  --wuep-muted: #6b7280;
+  --wuep-accent: #2f6df6;
+  --wuep-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+#wuep-trigger {
+  border: 1px solid var(--wuep-border);
+  background: #fff;
+  color: var(--wuep-text);
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 8px;
+  transition: all 0.18s ease;
+}
+
+#wuep-trigger:hover,
+#wuep-trigger.wuep-open {
+  border-color: rgba(47, 109, 246, 0.45);
+  box-shadow: 0 4px 12px rgba(47, 109, 246, 0.2);
+}
+
+#wuep-trigger svg {
+  width: 16px;
+  height: 16px;
 }
 
 #wuep-panel {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  width: min(320px, calc(100vw - 32px));
   z-index: 2147483647;
-  background: var(--wuep-panel);
+  width: 240px;
+  background: var(--wuep-bg);
   color: var(--wuep-text);
   border: 1px solid var(--wuep-border);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(6px);
+  box-shadow: var(--wuep-shadow);
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+#wuep-panel[hidden] {
+  display: none !important;
 }
 
 #wuep-panel * {
@@ -32,41 +58,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--wuep-border);
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid #eef2f7;
 }
 
 .wuep-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--wuep-muted);
 }
 
-.wuep-chip {
-  font-size: 11px;
-  color: var(--wuep-muted);
-  border: 1px solid var(--wuep-border);
-  border-radius: 999px;
-  padding: 2px 8px;
+#wuep-close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  font-size: 14px;
+  border-radius: 6px;
+}
+
+#wuep-close:hover {
+  color: #334155;
+  background: #f1f5f9;
 }
 
 .wuep-body {
-  padding: 10px 12px 8px;
-  display: grid;
-  gap: 10px;
-}
-
-.wuep-section {
+  padding: 10px;
   display: grid;
   gap: 6px;
-}
-
-.wuep-section-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--wuep-muted);
 }
 
 .wuep-option {
@@ -75,50 +99,24 @@
   gap: 8px;
   font-size: 13px;
   color: var(--wuep-text);
+  padding: 4px 2px;
 }
 
 .wuep-option input {
   accent-color: var(--wuep-accent);
 }
 
-.wuep-divider {
-  height: 1px;
-  background: var(--wuep-border);
-}
-
 .wuep-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-top: 1px solid var(--wuep-border);
-  padding: 8px 12px;
-}
-
-.wuep-status {
-  font-size: 12px;
+  border-top: 1px solid #eef2f7;
+  padding: 8px 10px;
+  font-size: 11px;
   color: var(--wuep-muted);
 }
 
-.wuep-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.wuep-btn {
-  border: 1px solid var(--wuep-border);
-  background: var(--wuep-badge);
-  color: var(--wuep-text);
-  border-radius: 8px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.wuep-btn:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-}
-
 .wuep-row-hidden {
+  display: none !important;
+}
+
+.wuep-native-hidden {
   display: none !important;
 }
