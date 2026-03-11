@@ -181,6 +181,19 @@
   height: 24px;
 }
 
+.wuep-range-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 4px;
+  background: #d7dee8;
+  border-radius: 999px;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .wuep-range-wrap input[type="range"] {
   position: absolute;
   left: 0;
@@ -192,17 +205,16 @@
   background: none;
   height: 24px;
   margin: 0;
+  z-index: 1;
 }
 
 .wuep-range-wrap input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
-  background: #d7dee8;
   border-radius: 999px;
 }
 
 .wuep-range-wrap input[type="range"]::-moz-range-track {
   height: 4px;
-  background: #d7dee8;
   border-radius: 999px;
 }
 

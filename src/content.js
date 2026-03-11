@@ -351,6 +351,7 @@
             <button id="wuep-reset-time" class="wuep-reset-mini" type="button" hidden>RESET</button>
           </div>
           <div class="wuep-range-wrap">
+            <div class="wuep-range-track" aria-hidden="true"></div>
             <input id="wuep-time-start" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
             <input id="wuep-time-end" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
           </div>
