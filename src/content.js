@@ -21,6 +21,30 @@
     return Array.from(document.querySelectorAll('app-schedule-row'));
   }
 
+  function isNativeVisible(row) {
+    // Ignore extension-applied hidden state when detecting native visibility.
+    const hadHiddenClass = row.classList.contains('wuep-row-hidden');
+    if (hadHiddenClass) row.classList.remove('wuep-row-hidden');
+
+    let visible = true;
+    let node = row;
+
+    while (node && node.nodeType === 1) {
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') {
+        visible = false;
+        break;
+      }
+      node = node.parentElement;
+    }
+
+    const rect = row.getBoundingClientRect();
+    if (!rect.width || !rect.height) visible = false;
+
+    if (hadHiddenClass) row.classList.add('wuep-row-hidden');
+    return visible;
+  }
+
   function extractTitle(row) {
     const titleNode = row.querySelector('app-schedule-info .title');
     if (titleNode) return normalizeText(titleNode.textContent);
@@ -43,28 +67,33 @@
     return state.classType === 'all' || classType === state.classType;
   }
 
-  function updateStatus() {
+  function updateStatus(nativeRows) {
     const status = document.querySelector('#wuep-status');
     if (!status) return;
 
-    const rows = getRows();
+    const rows = nativeRows || getRows().filter(isNativeVisible);
     const visible = rows.filter((row) => !row.classList.contains('wuep-row-hidden')).length;
     status.textContent = `${visible} visible / ${rows.length} total`;
   }
 
   function applyClassTypeFilterNow() {
-    const rows = getRows();
-    if (!rows.length) {
-      updateStatus();
+    const allRows = getRows();
+    if (!allRows.length) {
+      updateStatus([]);
       return;
     }
 
-    rows.forEach((row) => {
+    // First clear our own hidden state to compute a reliable native baseline.
+    allRows.forEach((row) => row.classList.remove('wuep-row-hidden'));
+
+    const nativeRows = allRows.filter(isNativeVisible);
+
+    nativeRows.forEach((row) => {
       const keep = rowMatchesClassType(row);
       row.classList.toggle('wuep-row-hidden', !keep);
     });
 
-    updateStatus();
+    updateStatus(nativeRows);
   }
 
   function scheduleApply() {
