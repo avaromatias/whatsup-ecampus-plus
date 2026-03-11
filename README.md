@@ -8,7 +8,7 @@ The native schedule screen includes class-type filters (`Face to Face`, `Have Fu
 
 ## Goal
 
-Provide a compact, modern, and intuitive class-type filter layer while preserving native scheduling behavior.
+Provide a compact, modern, and intuitive filter layer while preserving native scheduling behavior.
 
 ## Current behavior
 
@@ -23,14 +23,15 @@ The extension UI is injected only on:
 ### What the extension does
 
 - Adds a compact **funnel icon trigger** next to native filter controls.
-- Opens a small floating panel with class-type options:
-  - `All`
-  - `Face to Face`
-  - `Have Fun`
+- Opens a compact panel with:
+  - Class type (`All` / `Face to Face` / `Have Fun`)
+  - Day selection (`MON` to `SAT`)
+  - Time range slider (`09:30` to `21:30` by default)
 - Keeps panel collapsed by default.
 - Closes panel when:
   - user clicks outside, or
   - user clicks the close button (`×`) in the panel.
+- The panel is anchored to the filter toolbar (it does not stay fixed on viewport scroll).
 - Hides native `Face to Face` / `Have Fun` controls to avoid duplicated filter sources.
 - Leaves native `School` / `Live` controls untouched.
 - Applies filtering only to rows that are natively visible in the current schedule view.

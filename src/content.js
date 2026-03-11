@@ -2,12 +2,31 @@
   if (window.__wuepBootstrapped) return;
   window.__wuepBootstrapped = true;
 
-  const STORAGE_KEY = 'wuep_filters_v5';
+  const STORAGE_KEY = 'wuep_filters_v6';
   const ENABLED_KEY = 'wuep_enabled';
   const PANEL_ID = 'wuep-panel';
   const TRIGGER_ID = 'wuep-trigger';
 
-  const DEFAULT_STATE = { classType: 'all' };
+  const DAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const DAY_TO_FULL = {
+    MON: 'monday',
+    TUE: 'tuesday',
+    WED: 'wednesday',
+    THU: 'thursday',
+    FRI: 'friday',
+    SAT: 'saturday'
+  };
+
+  const MIN_MINUTES = 9 * 60 + 30; // 09:30
+  const MAX_MINUTES = 21 * 60 + 30; // 21:30
+
+  const DEFAULT_STATE = {
+    classType: 'all',
+    selectedDays: [...DAY_ORDER],
+    timeStart: MIN_MINUTES,
+    timeEnd: MAX_MINUTES
+  };
+
   const state = { ...DEFAULT_STATE, enabled: true, open: false };
 
   let observer = null;
@@ -56,19 +75,57 @@
     return normalizeText(parts[0] || rowText);
   }
 
+  function extractDay(row) {
+    const dayNode = row.querySelector('app-schedule-info .week-day');
+    const dayText = normalizeText(dayNode?.textContent || '');
+    return dayText.toLowerCase();
+  }
+
+  function extractTimeInMinutes(row) {
+    const hourNode = row.querySelector('app-schedule-info .hour');
+    const text = normalizeText(hourNode?.textContent || '');
+    const match = text.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    return hours * 60 + minutes;
+  }
+
   function inferClassType(title) {
     return /face to face/i.test(title) ? 'face' : 'havefun';
   }
 
-  function rowMatchesClassType(row) {
+  function dayIsSelected(dayFull) {
+    if (!dayFull) return false;
+    return state.selectedDays.some((abbr) => DAY_TO_FULL[abbr] === dayFull);
+  }
+
+  function rowMatchesFilters(row) {
     const title = extractTitle(row);
     if (!title) return false;
+
     const classType = inferClassType(title);
-    return state.classType === 'all' || classType === state.classType;
+    if (state.classType !== 'all' && classType !== state.classType) return false;
+
+    const day = extractDay(row);
+    if (!dayIsSelected(day)) return false;
+
+    const minutes = extractTimeInMinutes(row);
+    if (minutes == null) return false;
+    if (minutes < state.timeStart || minutes > state.timeEnd) return false;
+
+    return true;
   }
 
   function clearFilteringArtifacts() {
     getRows().forEach((row) => row.classList.remove('wuep-row-hidden'));
+  }
+
+  function formatTime(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   function updateStatus(nativeRows) {
@@ -78,9 +135,14 @@
     const rows = nativeRows || getRows().filter(isNativeVisible);
     const visible = rows.filter((row) => !row.classList.contains('wuep-row-hidden')).length;
     status.textContent = `${visible} visible / ${rows.length} total`;
+
+    const rangeLabel = document.querySelector('#wuep-range-label');
+    if (rangeLabel) {
+      rangeLabel.textContent = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
+    }
   }
 
-  function applyClassTypeFilterNow() {
+  function applyFiltersNow() {
     if (!state.enabled || !isSchedulePage()) {
       clearFilteringArtifacts();
       return;
@@ -96,7 +158,7 @@
     const nativeRows = allRows.filter(isNativeVisible);
 
     nativeRows.forEach((row) => {
-      const keep = rowMatchesClassType(row);
+      const keep = rowMatchesFilters(row);
       row.classList.toggle('wuep-row-hidden', !keep);
     });
 
@@ -110,7 +172,7 @@
     requestAnimationFrame(() => {
       scheduled = false;
       try {
-        applyClassTypeFilterNow();
+        applyFiltersNow();
       } catch (error) {
         console.error('[WUEP] apply failed:', error);
       }
@@ -120,7 +182,12 @@
   function saveState() {
     try {
       chrome.storage.sync.set({
-        [STORAGE_KEY]: { classType: state.classType },
+        [STORAGE_KEY]: {
+          classType: state.classType,
+          selectedDays: state.selectedDays,
+          timeStart: state.timeStart,
+          timeEnd: state.timeEnd
+        },
         [ENABLED_KEY]: state.enabled
       });
     } catch {
@@ -130,6 +197,13 @@
 
   function setState(partial) {
     Object.assign(state, partial);
+
+    if (state.timeStart > state.timeEnd) {
+      const tmp = state.timeStart;
+      state.timeStart = state.timeEnd;
+      state.timeEnd = tmp;
+    }
+
     saveState();
     syncControls();
     renderEnabledState();
@@ -137,9 +211,24 @@
   }
 
   function syncControls() {
-    document.querySelectorAll('#wuep-panel input[type="radio"]').forEach((input) => {
+    document.querySelectorAll('#wuep-panel input[name="classType"]').forEach((input) => {
       input.checked = state.classType === input.value;
     });
+
+    document.querySelectorAll('#wuep-panel .wuep-day').forEach((label) => {
+      const value = label.getAttribute('data-day');
+      label.classList.toggle('wuep-day-active', state.selectedDays.includes(value));
+      const input = label.querySelector('input');
+      if (input) input.checked = state.selectedDays.includes(value);
+    });
+
+    const startInput = document.querySelector('#wuep-time-start');
+    const endInput = document.querySelector('#wuep-time-end');
+    if (startInput) startInput.value = String(state.timeStart);
+    if (endInput) endInput.value = String(state.timeEnd);
+
+    const rangeLabel = document.querySelector('#wuep-range-label');
+    if (rangeLabel) rangeLabel.textContent = `${formatTime(state.timeStart)} → ${formatTime(state.timeEnd)}`;
   }
 
   function createClassTypeRadio(value, label) {
@@ -159,6 +248,35 @@
     return wrapper;
   }
 
+  function createDayToggle(day) {
+    const label = document.createElement('label');
+    label.className = 'wuep-day';
+    label.setAttribute('data-day', day);
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = true;
+
+    input.addEventListener('change', () => {
+      const next = new Set(state.selectedDays);
+      if (input.checked) next.add(day);
+      else next.delete(day);
+
+      if (!next.size) {
+        input.checked = true;
+        return;
+      }
+
+      setState({ selectedDays: DAY_ORDER.filter((d) => next.has(d)) });
+    });
+
+    const span = document.createElement('span');
+    span.textContent = day;
+
+    label.append(input, span);
+    return label;
+  }
+
   function buildPanel() {
     if (document.getElementById(PANEL_ID)) return;
 
@@ -168,21 +286,64 @@
 
     panel.innerHTML = `
       <div class="wuep-header">
-        <div class="wuep-title">Class Type Filter</div>
+        <div class="wuep-title">Filters</div>
         <button id="wuep-close" type="button" aria-label="Close">×</button>
       </div>
-      <div class="wuep-body" id="wuep-class-type"></div>
+      <div class="wuep-body">
+        <section>
+          <div class="wuep-section-label">Class Type</div>
+          <div id="wuep-class-type"></div>
+        </section>
+        <section>
+          <div class="wuep-section-label">Days</div>
+          <div id="wuep-days" class="wuep-days"></div>
+        </section>
+        <section>
+          <div class="wuep-section-label">Time Range</div>
+          <div class="wuep-range-wrap">
+            <input id="wuep-time-start" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
+            <input id="wuep-time-end" type="range" min="${MIN_MINUTES}" max="${MAX_MINUTES}" step="30" />
+          </div>
+          <div id="wuep-range-label" class="wuep-range-label"></div>
+        </section>
+      </div>
       <div class="wuep-footer" id="wuep-status">Preparing...</div>
     `;
 
-    const body = panel.querySelector('#wuep-class-type');
-    body.append(
+    const classType = panel.querySelector('#wuep-class-type');
+    classType.append(
       createClassTypeRadio('all', 'All'),
       createClassTypeRadio('face', 'Face to Face'),
       createClassTypeRadio('havefun', 'Have Fun')
     );
 
+    const days = panel.querySelector('#wuep-days');
+    DAY_ORDER.forEach((d) => days.append(createDayToggle(d)));
+
     panel.querySelector('#wuep-close').addEventListener('click', () => closePanel());
+
+    const startInput = panel.querySelector('#wuep-time-start');
+    const endInput = panel.querySelector('#wuep-time-end');
+
+    startInput.addEventListener('input', () => {
+      const value = Number(startInput.value);
+      if (value > state.timeEnd) {
+        endInput.value = String(value);
+        setState({ timeStart: value, timeEnd: value });
+      } else {
+        setState({ timeStart: value });
+      }
+    });
+
+    endInput.addEventListener('input', () => {
+      const value = Number(endInput.value);
+      if (value < state.timeStart) {
+        startInput.value = String(value);
+        setState({ timeStart: value, timeEnd: value });
+      } else {
+        setState({ timeEnd: value });
+      }
+    });
 
     document.body.appendChild(panel);
     syncControls();
@@ -201,7 +362,6 @@
   function ensureToolbarLayout() {
     const root = findFilterBarRoot();
     if (!root) return null;
-
     root.classList.add('wuep-toolbar-root');
     return root;
   }
@@ -210,12 +370,14 @@
     const root = ensureToolbarLayout();
     if (!root) return;
 
-    let trigger = document.getElementById(TRIGGER_ID);
-    if (trigger && trigger.parentElement !== root) {
-      trigger.remove();
-      trigger = null;
+    let anchor = root.querySelector('.wuep-anchor');
+    if (!anchor) {
+      anchor = document.createElement('div');
+      anchor.className = 'wuep-anchor';
+      root.appendChild(anchor);
     }
 
+    let trigger = document.getElementById(TRIGGER_ID);
     if (!trigger) {
       trigger = document.createElement('button');
       trigger.id = TRIGGER_ID;
@@ -229,8 +391,12 @@
         </svg>
       `;
       trigger.addEventListener('click', () => (state.open ? closePanel() : openPanel()));
-      root.appendChild(trigger);
     }
+
+    if (trigger.parentElement !== anchor) anchor.appendChild(trigger);
+
+    const panel = document.getElementById(PANEL_ID);
+    if (panel && panel.parentElement !== anchor) anchor.appendChild(panel);
 
     return trigger;
   }
@@ -242,22 +408,12 @@
     };
   }
 
-  function positionPanel() {
-    const { panel, trigger } = panelAndTrigger();
-    if (!panel || !trigger || panel.hidden) return;
-
-    const rect = trigger.getBoundingClientRect();
-    panel.style.top = `${rect.bottom + 8}px`;
-    panel.style.left = `${Math.max(8, rect.right - panel.offsetWidth)}px`;
-  }
-
   function openPanel() {
     const { panel, trigger } = panelAndTrigger();
     if (!panel || !trigger) return;
     panel.hidden = false;
     trigger.classList.add('wuep-open');
     state.open = true;
-    positionPanel();
   }
 
   function closePanel() {
@@ -286,7 +442,6 @@
 
   function handleOutsideClick(event) {
     if (!state.open) return;
-
     const { panel, trigger } = panelAndTrigger();
     if (!panel || !trigger) return;
 
@@ -343,8 +498,6 @@
 
   function attachGlobalListeners() {
     document.addEventListener('click', handleOutsideClick, true);
-    window.addEventListener('resize', positionPanel);
-    window.addEventListener('scroll', positionPanel, true);
 
     if (chrome?.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {
@@ -362,13 +515,22 @@
     try {
       chrome.storage.sync.get([STORAGE_KEY, ENABLED_KEY], (result) => {
         const saved = result?.[STORAGE_KEY];
-        if (saved && ['all', 'face', 'havefun'].includes(saved.classType)) {
-          state.classType = saved.classType;
+        if (saved) {
+          if (['all', 'face', 'havefun'].includes(saved.classType)) state.classType = saved.classType;
+          if (Array.isArray(saved.selectedDays) && saved.selectedDays.length) {
+            state.selectedDays = saved.selectedDays.filter((d) => DAY_ORDER.includes(d));
+          }
+          if (Number.isFinite(saved.timeStart)) state.timeStart = Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, saved.timeStart));
+          if (Number.isFinite(saved.timeEnd)) state.timeEnd = Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, saved.timeEnd));
         }
 
-        if (typeof result?.[ENABLED_KEY] === 'boolean') {
-          state.enabled = result[ENABLED_KEY];
+        if (!state.selectedDays.length) state.selectedDays = [...DAY_ORDER];
+        if (state.timeStart > state.timeEnd) {
+          state.timeStart = MIN_MINUTES;
+          state.timeEnd = MAX_MINUTES;
         }
+
+        if (typeof result?.[ENABLED_KEY] === 'boolean') state.enabled = result[ENABLED_KEY];
 
         buildPanel();
         attachGlobalListeners();

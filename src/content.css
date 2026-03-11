@@ -13,6 +13,12 @@
   gap: 10px;
 }
 
+.wuep-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 #wuep-trigger {
   border: 1px solid var(--wuep-border);
   background: #fff;
@@ -41,9 +47,11 @@
 }
 
 #wuep-panel {
-  position: fixed;
-  z-index: 2147483647;
-  width: 236px;
+  position: absolute;
+  z-index: 1000;
+  width: 260px;
+  right: 0;
+  top: calc(100% + 8px);
   background: var(--wuep-bg);
   color: var(--wuep-text);
   border: 1px solid var(--wuep-border);
@@ -97,7 +105,90 @@
 .wuep-body {
   padding: 8px 10px;
   display: grid;
+  gap: 8px;
+}
+
+.wuep-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wuep-muted);
+  margin-bottom: 2px;
+}
+
+.wuep-days {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
+}
+
+.wuep-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--wuep-border);
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.wuep-day input {
+  display: none;
+}
+
+.wuep-day.wuep-day-active {
+  border-color: #2f6df6;
+  color: #2f6df6;
+  background: #eef4ff;
+}
+
+.wuep-range-label {
+  font-size: 11px;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.wuep-range-wrap {
+  position: relative;
+  height: 24px;
+}
+
+.wuep-range-wrap input[type="range"] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  height: 24px;
+  margin: 0;
+}
+
+.wuep-range-wrap input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: all;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #2f6df6;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(47, 109, 246, 0.35);
+}
+
+.wuep-range-wrap input[type="range"]::-moz-range-thumb {
+  pointer-events: all;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #2f6df6;
+  border: 2px solid #fff;
 }
 
 .wuep-option {
