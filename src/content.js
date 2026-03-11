@@ -2,7 +2,7 @@
   if (window.__wuepBootstrapped) return;
   window.__wuepBootstrapped = true;
 
-  const STORAGE_KEY = 'wuep_filters_v4';
+  const STORAGE_KEY = 'wuep_filters_v5';
   const ENABLED_KEY = 'wuep_enabled';
   const PANEL_ID = 'wuep-panel';
   const TRIGGER_ID = 'wuep-trigger';
@@ -12,6 +12,7 @@
 
   let observer = null;
   let scheduled = false;
+  let lastPath = location.pathname;
 
   const isSchedulePage = () => /\/Api\/ScheduleAClass(?:School|Live|Ff|Hf)?$/i.test(location.pathname);
 
@@ -66,20 +67,21 @@
     return state.classType === 'all' || classType === state.classType;
   }
 
+  function clearFilteringArtifacts() {
+    getRows().forEach((row) => row.classList.remove('wuep-row-hidden'));
+  }
+
   function updateStatus(nativeRows) {
     const status = document.querySelector('#wuep-status');
     if (!status) return;
+
     const rows = nativeRows || getRows().filter(isNativeVisible);
     const visible = rows.filter((row) => !row.classList.contains('wuep-row-hidden')).length;
     status.textContent = `${visible} visible / ${rows.length} total`;
   }
 
-  function clearFilteringArtifacts() {
-    getRows().forEach((row) => row.classList.remove('wuep-row-hidden'));
-  }
-
   function applyClassTypeFilterNow() {
-    if (!state.enabled) {
+    if (!state.enabled || !isSchedulePage()) {
       clearFilteringArtifacts();
       return;
     }
@@ -186,34 +188,51 @@
     syncControls();
   }
 
-  function ensureTriggerHost() {
-    const items = Array.from(document.querySelectorAll('span.submenu-item')).filter((n) => n.offsetParent !== null);
-    return items[0]?.parentElement?.parentElement || items[0]?.parentElement || null;
+  function findFilterBarRoot() {
+    const sample = Array.from(document.querySelectorAll('span.submenu-item')).find((el) => {
+      const t = normalizeText(el.textContent);
+      return ['Face to Face', 'Have Fun', 'School', 'Live'].includes(t) && el.offsetParent !== null;
+    });
+
+    if (!sample) return null;
+    return sample.closest('app-sub-menu-buttons') || sample.parentElement?.parentElement || null;
+  }
+
+  function ensureToolbarLayout() {
+    const root = findFilterBarRoot();
+    if (!root) return null;
+
+    root.classList.add('wuep-toolbar-root');
+    return root;
   }
 
   function buildTrigger() {
-    if (document.getElementById(TRIGGER_ID)) return;
-    const host = ensureTriggerHost();
-    if (!host) return;
+    const root = ensureToolbarLayout();
+    if (!root) return;
 
-    const btn = document.createElement('button');
-    btn.id = TRIGGER_ID;
-    btn.type = 'button';
-    btn.setAttribute('aria-label', 'Open filter panel');
-    btn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 5h18"></path>
-        <path d="M6 12h12"></path>
-        <path d="M10 19h4"></path>
-      </svg>
-    `;
+    let trigger = document.getElementById(TRIGGER_ID);
+    if (trigger && trigger.parentElement !== root) {
+      trigger.remove();
+      trigger = null;
+    }
 
-    btn.addEventListener('click', () => {
-      if (state.open) closePanel();
-      else openPanel();
-    });
+    if (!trigger) {
+      trigger = document.createElement('button');
+      trigger.id = TRIGGER_ID;
+      trigger.type = 'button';
+      trigger.setAttribute('aria-label', 'Open filter panel');
+      trigger.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 5h18"></path>
+          <path d="M6 12h12"></path>
+          <path d="M10 19h4"></path>
+        </svg>
+      `;
+      trigger.addEventListener('click', () => (state.open ? closePanel() : openPanel()));
+      root.appendChild(trigger);
+    }
 
-    host.appendChild(btn);
+    return trigger;
   }
 
   function panelAndTrigger() {
@@ -256,7 +275,7 @@
     });
 
     native.forEach((el) => {
-      const wrapper = el.parentElement || el;
+      const wrapper = el.closest('a') || el;
       wrapper.classList.add('wuep-native-hidden');
     });
   }
@@ -267,6 +286,7 @@
 
   function handleOutsideClick(event) {
     if (!state.open) return;
+
     const { panel, trigger } = panelAndTrigger();
     if (!panel || !trigger) return;
 
@@ -287,28 +307,38 @@
       return;
     }
 
-    if (panel) panel.hidden = !state.open;
     if (trigger) trigger.style.display = 'inline-flex';
+    if (panel) panel.hidden = !state.open;
     hideNativeClassTypeFilters();
+  }
+
+  function mountScheduleUI() {
+    if (!isSchedulePage()) return;
+    buildPanel();
+    buildTrigger();
+    renderEnabledState();
+    scheduleApply();
   }
 
   function startObserver() {
     if (observer) observer.disconnect();
 
-    const target = document.querySelector('main') || document.body;
     observer = new MutationObserver((mutations) => {
-      const shouldReapply = mutations.some((m) => m.type === 'childList');
-      if (!shouldReapply) return;
-
-      if (state.enabled && isSchedulePage()) {
-        buildTrigger();
-        hideNativeClassTypeFilters();
-        if (state.open) positionPanel();
-      }
-      scheduleApply();
+      const shouldReact = mutations.some((m) => m.type === 'childList');
+      if (!shouldReact) return;
+      mountScheduleUI();
     });
 
-    observer.observe(target, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function startPathWatcher() {
+    setInterval(() => {
+      if (location.pathname !== lastPath) {
+        lastPath = location.pathname;
+        mountScheduleUI();
+      }
+    }, 300);
   }
 
   function attachGlobalListeners() {
@@ -328,14 +358,6 @@
     }
   }
 
-  function initUI() {
-    if (!isSchedulePage()) return;
-    buildPanel();
-    buildTrigger();
-    renderEnabledState();
-    scheduleApply();
-  }
-
   function loadStateAndInit() {
     try {
       chrome.storage.sync.get([STORAGE_KEY, ENABLED_KEY], (result) => {
@@ -348,14 +370,18 @@
           state.enabled = result[ENABLED_KEY];
         }
 
+        buildPanel();
         attachGlobalListeners();
         startObserver();
-        initUI();
+        startPathWatcher();
+        mountScheduleUI();
       });
     } catch {
+      buildPanel();
       attachGlobalListeners();
       startObserver();
-      initUI();
+      startPathWatcher();
+      mountScheduleUI();
     }
   }
 
