@@ -1,0 +1,42 @@
+.wuep-word-item {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.wuep-word-item.wuep-word-used {
+  opacity: 0.45;
+  text-decoration: line-through;
+  filter: grayscale(0.35);
+}
+
+.wuep-input-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.wuep-clear-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.14);
+  color: #334155;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.wuep-clear-btn:hover {
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.wuep-clear-btn[hidden] {
+  display: none;
+}
