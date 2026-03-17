@@ -13,8 +13,7 @@
     wordItems: [],
     wordByInput: new WeakMap(),
     inputByWordId: new Map(),
-    bootstrapped: false,
-    listenersAttached: false
+    bootstrapped: false
   };
 
   let observer = null;
@@ -26,16 +25,34 @@
     return /^[a-zA-Z][a-zA-Z'’-]{0,20}$/.test(text);
   }
 
+  function deepFindAll(predicate) {
+    const out = [];
+
+    function walk(root) {
+      const tree = root instanceof ShadowRoot ? root : root;
+      const elements = tree.querySelectorAll ? Array.from(tree.querySelectorAll('*')) : [];
+      elements.forEach((el) => {
+        if (predicate(el)) out.push(el);
+        if (el.shadowRoot) walk(el.shadowRoot);
+      });
+    }
+
+    walk(document);
+    return out;
+  }
+
   function findWordList() {
-    const lists = Array.from(document.querySelectorAll('main ul, main ol'));
+    const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
+
     for (const list of lists) {
-      const items = Array.from(list.querySelectorAll(':scope > li'));
+      const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
       if (items.length < 4) continue;
       const words = items.map((li) => normalize(li.textContent));
       if (words.every((w) => w && isWordLike(w))) {
         return items;
       }
     }
+
     return [];
   }
 
@@ -47,32 +64,57 @@
     return false;
   }
 
-  function findInputs(scopeRoot) {
-    const root = scopeRoot || document.querySelector('main') || document.body;
-    const candidates = Array.from(
-      root.querySelectorAll('input[type="text"], textarea, [contenteditable="true"]')
+  function findInputs() {
+    const candidates = deepFindAll(
+      (el) =>
+        el.matches?.('input[type="text"], textarea, [contenteditable="true"]') ||
+        el.getAttribute?.('contenteditable') === 'true'
     );
 
     return candidates.filter((el) => isEditableTarget(el) && el.offsetParent !== null);
   }
 
   function wrapInput(input) {
-    if (input.closest('.wuep-input-wrap')) return;
-    const wrap = document.createElement('span');
-    wrap.className = 'wuep-input-wrap';
-    input.parentNode.insertBefore(wrap, input);
-    wrap.appendChild(input);
+    if (!input.closest('.wuep-input-wrap')) {
+      const wrap = document.createElement('span');
+      wrap.className = 'wuep-input-wrap';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
 
-    const clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.className = 'wuep-clear-btn';
-    clearBtn.textContent = '×';
-    clearBtn.hidden = true;
-    clearBtn.addEventListener('click', () => {
-      clearInput(input);
-      input.focus();
-    });
-    wrap.appendChild(clearBtn);
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'wuep-clear-btn';
+      clearBtn.textContent = '×';
+      clearBtn.hidden = true;
+      clearBtn.addEventListener('click', () => {
+        clearInput(input);
+        input.focus();
+      });
+      wrap.appendChild(clearBtn);
+    }
+
+    if (!input.dataset.wuepBound) {
+      input.addEventListener('focus', () => {
+        state.activeInput = input;
+      });
+      input.addEventListener('input', () => {
+        const assigned = getAssignedWord(input);
+        const value = readInputText(input);
+
+        if (!value) {
+          releaseWordFromInput(input);
+          updateClearButton(input);
+          return;
+        }
+
+        if (assigned && value.toLowerCase() !== assigned.text.toLowerCase()) {
+          releaseWordFromInput(input);
+        }
+
+        updateClearButton(input);
+      });
+      input.dataset.wuepBound = '1';
+    }
   }
 
   function getClearBtn(input) {
@@ -160,32 +202,6 @@
     target.focus();
   }
 
-  function onInputFocus(event) {
-    const target = event.target;
-    if (!isEditableTarget(target)) return;
-    state.activeInput = target;
-  }
-
-  function onInputChange(event) {
-    const input = event.target;
-    if (!isEditableTarget(input)) return;
-
-    const assigned = getAssignedWord(input);
-    const value = readInputText(input);
-
-    if (!value) {
-      releaseWordFromInput(input);
-      updateClearButton(input);
-      return;
-    }
-
-    if (assigned && value.toLowerCase() !== assigned.text.toLowerCase()) {
-      releaseWordFromInput(input);
-    }
-
-    updateClearButton(input);
-  }
-
   function installWordInteractions(items) {
     state.wordItems = items.map((li, idx) => {
       const text = normalize(li.textContent);
@@ -218,12 +234,6 @@
 
     installWordInteractions(items);
     reconcileAssignments();
-
-    if (!state.listenersAttached) {
-      document.addEventListener('focusin', onInputFocus, true);
-      document.addEventListener('input', onInputChange, true);
-      state.listenersAttached = true;
-    }
 
     state.bootstrapped = true;
     window.__wuepExerciseProbe = 'snacks-mounted';
