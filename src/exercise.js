@@ -39,11 +39,21 @@
     return [];
   }
 
+  function isEditableTarget(el) {
+    if (!el) return false;
+    if (el instanceof HTMLInputElement) return !el.disabled;
+    if (el instanceof HTMLTextAreaElement) return !el.disabled;
+    if (el instanceof HTMLElement && el.getAttribute('contenteditable') === 'true') return true;
+    return false;
+  }
+
   function findInputs(scopeRoot) {
     const root = scopeRoot || document.querySelector('main') || document.body;
-    const inputs = Array.from(root.querySelectorAll('input[type="text"], textarea'))
-      .filter((el) => !el.disabled && el.offsetParent !== null);
-    return inputs;
+    const candidates = Array.from(
+      root.querySelectorAll('input[type="text"], textarea, [contenteditable="true"]')
+    );
+
+    return candidates.filter((el) => isEditableTarget(el) && el.offsetParent !== null);
   }
 
   function wrapInput(input) {
@@ -70,7 +80,12 @@
   }
 
   function setInputValue(input, value) {
-    input.value = value;
+    if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+      input.value = value;
+    } else if (input instanceof HTMLElement && input.getAttribute('contenteditable') === 'true') {
+      input.textContent = value;
+    }
+
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -95,10 +110,16 @@
     markWordUsed(assigned.id, false);
   }
 
+  function readInputText(input) {
+    if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) return normalize(input.value);
+    if (input instanceof HTMLElement && input.getAttribute('contenteditable') === 'true') return normalize(input.textContent);
+    return '';
+  }
+
   function updateClearButton(input) {
     const btn = getClearBtn(input);
     if (!btn) return;
-    btn.hidden = !normalize(input.value);
+    btn.hidden = !readInputText(input);
   }
 
   function clearInput(input) {
@@ -141,16 +162,16 @@
 
   function onInputFocus(event) {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+    if (!isEditableTarget(target)) return;
     state.activeInput = target;
   }
 
   function onInputChange(event) {
     const input = event.target;
-    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return;
+    if (!isEditableTarget(input)) return;
 
     const assigned = getAssignedWord(input);
-    const value = normalize(input.value);
+    const value = readInputText(input);
 
     if (!value) {
       releaseWordFromInput(input);
