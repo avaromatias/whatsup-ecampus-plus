@@ -63,6 +63,13 @@
     return false;
   }
 
+  function isVisibleElement(el) {
+    if (!(el instanceof Element)) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    return el.getClientRects().length > 0;
+  }
+
   function findInputs() {
     const candidates = deepFindAll(
       (el) =>
@@ -70,7 +77,7 @@
         el.getAttribute?.('contenteditable') === 'true'
     );
 
-    return candidates.filter((el) => isEditableTarget(el) && el.offsetParent !== null);
+    return candidates.filter((el) => isEditableTarget(el) && isVisibleElement(el));
   }
 
   function getUsage(wordId) {
@@ -176,8 +183,10 @@
 
   function renderWordBadge(item, count) {
     if (!item.badgeEl) return;
-    item.badgeEl.hidden = count <= 0;
-    item.badgeEl.textContent = String(count);
+    const visible = count > 1;
+    item.badgeEl.hidden = !visible;
+    item.badgeEl.style.display = visible ? 'inline-block' : 'none';
+    item.badgeEl.textContent = visible ? String(count) : '';
   }
 
   function updateWordVisualState() {
@@ -185,8 +194,12 @@
 
     state.wordItems.forEach((item) => {
       const count = getUsage(item.id);
+      const used = markUsed && count > 0;
       item.used = count > 0;
-      item.el.classList.toggle('wuep-word-used', markUsed && count > 0);
+      item.el.classList.toggle('wuep-word-used', used);
+      item.el.style.opacity = used ? '0.45' : '';
+      item.el.style.textDecoration = used ? 'line-through' : '';
+      item.el.style.filter = used ? 'grayscale(0.35)' : '';
       renderWordBadge(item, count);
     });
   }
@@ -268,7 +281,7 @@
     if (!state.enabled) return;
 
     let target = state.activeInput;
-    if (!target || !document.contains(target)) {
+    if (!target || !target.isConnected) {
       target = findInputs()[0] || null;
     }
     if (!target) return;
@@ -284,12 +297,31 @@
       const id = `${idx}:${text.toLowerCase()}`;
 
       li.classList.add('wuep-word-item');
+      li.style.position = li.style.position || 'relative';
+      li.style.cursor = 'pointer';
+      li.style.userSelect = 'none';
 
       let badge = li.querySelector('.wuep-word-badge');
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'wuep-word-badge';
         badge.hidden = true;
+        badge.style.position = 'absolute';
+        badge.style.top = '-6px';
+        badge.style.right = '-6px';
+        badge.style.minWidth = '16px';
+        badge.style.height = '16px';
+        badge.style.borderRadius = '999px';
+        badge.style.background = '#ef4444';
+        badge.style.color = '#fff';
+        badge.style.fontSize = '10px';
+        badge.style.lineHeight = '16px';
+        badge.style.textAlign = 'center';
+        badge.style.padding = '0 4px';
+        badge.style.fontWeight = '700';
+        badge.style.boxShadow = '0 0 0 2px #fff';
+        badge.style.pointerEvents = 'none';
+        badge.style.display = 'none';
         li.appendChild(badge);
       }
 
@@ -304,6 +336,11 @@
   function cleanupWordInteractions() {
     state.wordItems.forEach((item) => {
       item.el.classList.remove('wuep-word-item', 'wuep-word-used');
+      item.el.style.opacity = '';
+      item.el.style.textDecoration = '';
+      item.el.style.filter = '';
+      item.el.style.cursor = '';
+      item.el.style.userSelect = '';
       if (item.onClick) item.el.removeEventListener('click', item.onClick);
       if (item.badgeEl && item.badgeEl.parentNode === item.el) item.badgeEl.remove();
     });
