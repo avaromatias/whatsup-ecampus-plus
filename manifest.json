@@ -21,7 +21,7 @@
     },
     {
       "matches": [
-        "https://ecampus.whatsup.es/snacks/*"
+        "https://ecampus.whatsup.es/*"
       ],
       "js": [
         "src/exercise.js"

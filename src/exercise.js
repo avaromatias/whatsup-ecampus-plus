@@ -1,6 +1,11 @@
 (() => {
+  window.__wuepExerciseProbe = 'script-loaded';
   const ENABLED_KEY = 'wuep_enabled';
-  if (!/\/snacks\//i.test(location.pathname)) return;
+  if (!/\/snacks\//i.test(location.pathname)) {
+    window.__wuepExerciseProbe = 'loaded-non-snacks';
+    return;
+  }
+  window.__wuepExerciseProbe = 'loaded-snacks';
 
   const state = {
     enabled: true,
@@ -179,10 +184,16 @@
   }
 
   function init() {
-    if (!state.enabled) return;
+    if (!state.enabled) {
+      window.__wuepExerciseProbe = 'disabled';
+      return;
+    }
 
     const items = findWordList();
-    if (!items.length) return;
+    if (!items.length) {
+      window.__wuepExerciseProbe = 'snacks-no-word-list-yet';
+      return;
+    }
 
     installWordInteractions(items);
     reconcileAssignments();
@@ -194,6 +205,7 @@
     }
 
     state.bootstrapped = true;
+    window.__wuepExerciseProbe = 'snacks-mounted';
   }
 
   function refreshIfNeeded() {
