@@ -2,6 +2,8 @@
   window.__wuepExerciseProbe = 'script-loaded';
 
   const ENABLED_KEY = 'wuep_enabled';
+  const ASSIGN_ATTR = 'data-wuep-word-id';
+
   if (!/\/snacks\//i.test(location.pathname)) {
     window.__wuepExerciseProbe = 'loaded-non-snacks';
     return;
@@ -14,7 +16,7 @@
     wordItems: [],
     assignmentByInput: new WeakMap(), // input -> { wordId }
     usageByWordId: new Map(),
-    boundInputs: new WeakMap(), // input -> { onFocus, onInput }
+    boundInputs: new WeakMap(),
     bootstrapped: false
   };
 
@@ -42,6 +44,31 @@
     return out;
   }
 
+  function isVisibleElement(el) {
+    if (!(el instanceof Element)) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    return el.getClientRects().length > 0;
+  }
+
+  function isEditableTarget(el) {
+    if (!el) return false;
+    if (el instanceof HTMLInputElement) return !el.disabled;
+    if (el instanceof HTMLTextAreaElement) return !el.disabled;
+    if (el instanceof HTMLElement && el.getAttribute('contenteditable') === 'true') return true;
+    return false;
+  }
+
+  function findInputs() {
+    const candidates = deepFindAll(
+      (el) =>
+        el.matches?.('input[type="text"], textarea, [contenteditable="true"]') ||
+        el.getAttribute?.('contenteditable') === 'true'
+    );
+
+    return candidates.filter((el) => isEditableTarget(el) && isVisibleElement(el));
+  }
+
   function findWordList() {
     const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
 
@@ -55,61 +82,22 @@
     return [];
   }
 
-  function isEditableTarget(el) {
-    if (!el) return false;
-    if (el instanceof HTMLInputElement) return !el.disabled;
-    if (el instanceof HTMLTextAreaElement) return !el.disabled;
-    if (el instanceof HTMLElement && el.getAttribute('contenteditable') === 'true') return true;
-    return false;
-  }
-
-  function isVisibleElement(el) {
-    if (!(el instanceof Element)) return false;
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
-    return el.getClientRects().length > 0;
-  }
-
-  function findInputs() {
-    const candidates = deepFindAll(
-      (el) =>
-        el.matches?.('input[type="text"], textarea, [contenteditable="true"]') ||
-        el.getAttribute?.('contenteditable') === 'true'
-    );
-
-    return candidates.filter((el) => isEditableTarget(el) && isVisibleElement(el));
-  }
-
-  function getUsage(wordId) {
-    return state.usageByWordId.get(wordId) || 0;
-  }
-
-  function setUsage(wordId, count) {
-    const safe = Math.max(0, count | 0);
-    if (safe === 0) state.usageByWordId.delete(wordId);
-    else state.usageByWordId.set(wordId, safe);
-  }
-
-  function bumpUsage(wordId, delta) {
-    setUsage(wordId, getUsage(wordId) + delta);
-  }
-
   function setCaretToEnd(input) {
     try {
       if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
         const pos = input.value.length;
         input.setSelectionRange(pos, pos);
       } else if (input instanceof HTMLElement && input.getAttribute('contenteditable') === 'true') {
-        const selection = window.getSelection();
-        if (!selection) return;
+        const sel = window.getSelection();
+        if (!sel) return;
         const range = document.createRange();
         range.selectNodeContents(input);
         range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
+        sel.removeAllRanges();
+        sel.addRange(range);
       }
     } catch {
-      // no-op
+      // ignore
     }
   }
 
@@ -131,22 +119,6 @@
     return '';
   }
 
-  function getAssignedWord(input) {
-    return state.assignmentByInput.get(input) || null;
-  }
-
-  function assignMetaToInput(input, wordId) {
-    state.assignmentByInput.set(input, { wordId });
-  }
-
-  function releaseWordFromInput(input) {
-    const assigned = getAssignedWord(input);
-    if (!assigned) return;
-
-    state.assignmentByInput.delete(input);
-    bumpUsage(assigned.wordId, -1);
-  }
-
   function getClearBtn(input) {
     return input.closest('.wuep-input-wrap')?.querySelector('.wuep-clear-btn') || null;
   }
@@ -157,49 +129,88 @@
     btn.hidden = !readInputText(input);
   }
 
+  function getAssignedWordId(input) {
+    return input.getAttribute(ASSIGN_ATTR) || null;
+  }
+
+  function setAssignedWordId(input, wordId) {
+    if (wordId) input.setAttribute(ASSIGN_ATTR, wordId);
+    else input.removeAttribute(ASSIGN_ATTR);
+  }
+
+  function recomputeAssignmentsAndUsage() {
+    state.assignmentByInput = new WeakMap();
+    state.usageByWordId.clear();
+
+    const validIds = new Set(state.wordItems.map((w) => w.id));
+
+    findInputs().forEach((input) => {
+      const value = readInputText(input);
+      const wordId = getAssignedWordId(input);
+
+      if (!value || !wordId || !validIds.has(wordId)) {
+        setAssignedWordId(input, null);
+        return;
+      }
+
+      state.assignmentByInput.set(input, { wordId });
+      state.usageByWordId.set(wordId, (state.usageByWordId.get(wordId) || 0) + 1);
+    });
+  }
+
+  function clearAssignment(input) {
+    state.assignmentByInput.delete(input);
+    setAssignedWordId(input, null);
+  }
+
   function clearInput(input) {
     if (!input) return;
-    releaseWordFromInput(input);
+    clearAssignment(input);
     setInputValue(input, '');
     updateClearButton(input);
+    recomputeAssignmentsAndUsage();
     updateWordVisualState();
   }
 
-  function getEmptyInputsCount() {
-    return findInputs().filter((input) => !readInputText(input)).length;
-  }
-
-  function shouldMarkAsUsed() {
-    const totalWords = state.wordItems.length;
-    const emptyInputs = getEmptyInputsCount();
-
-    // In reuse scenarios (less words than sentences), only start strike-through
-    // when each remaining empty sentence maps 1:1 with remaining never-used words.
-    const neverUsedWords = state.wordItems.filter((w) => getUsage(w.id) === 0).length;
-    if (totalWords < emptyInputs) return neverUsedWords === emptyInputs;
-
-    return true;
+  function styleBadgeElement(badge) {
+    badge.style.position = 'absolute';
+    badge.style.top = '-6px';
+    badge.style.right = '-6px';
+    badge.style.minWidth = '16px';
+    badge.style.height = '16px';
+    badge.style.borderRadius = '999px';
+    badge.style.background = '#ef4444';
+    badge.style.color = '#fff';
+    badge.style.fontSize = '10px';
+    badge.style.lineHeight = '16px';
+    badge.style.textAlign = 'center';
+    badge.style.padding = '0 4px';
+    badge.style.fontWeight = '700';
+    badge.style.boxShadow = '0 0 0 2px #fff';
+    badge.style.pointerEvents = 'none';
+    badge.style.display = 'none';
   }
 
   function renderWordBadge(item, count) {
-    if (!item.badgeEl) return;
+    const badge = item.badgeEl;
+    if (!badge) return;
     const visible = count > 1;
-    item.badgeEl.hidden = !visible;
-    item.badgeEl.style.display = visible ? 'inline-block' : 'none';
-    item.badgeEl.textContent = visible ? String(count) : '';
+    badge.hidden = !visible;
+    badge.style.display = visible ? 'inline-block' : 'none';
+    badge.textContent = visible ? String(count) : '';
   }
 
   function updateWordVisualState() {
-    const markUsed = shouldMarkAsUsed();
-
     state.wordItems.forEach((item) => {
-      const count = getUsage(item.id);
-      const used = markUsed && count > 0;
-      item.used = count > 0;
+      const count = state.usageByWordId.get(item.id) || 0;
+      const used = count > 0;
+      item.used = used;
+
       item.el.classList.toggle('wuep-word-used', used);
       item.el.style.opacity = used ? '0.45' : '';
       item.el.style.textDecoration = used ? 'line-through' : '';
       item.el.style.filter = used ? 'grayscale(0.35)' : '';
+
       renderWordBadge(item, count);
     });
   }
@@ -229,9 +240,11 @@
       };
 
       const onInput = () => {
-        const value = readInputText(input);
-        if (!value) releaseWordFromInput(input);
+        if (!readInputText(input)) {
+          clearAssignment(input);
+        }
         updateClearButton(input);
+        recomputeAssignmentsAndUsage();
         updateWordVisualState();
       };
 
@@ -253,27 +266,32 @@
     delete input.dataset.wuepBound;
 
     const wrap = input.closest('.wuep-input-wrap');
-    if (!wrap) return;
-
-    const parent = wrap.parentNode;
-    if (!parent) return;
-    parent.insertBefore(input, wrap);
+    if (!wrap || !wrap.parentNode) return;
+    wrap.parentNode.insertBefore(input, wrap);
     wrap.remove();
   }
 
+  function findWordById(wordId) {
+    return state.wordItems.find((w) => w.id === wordId) || null;
+  }
+
   function assignWordToInput(word, input) {
-    if (!input || !word) return;
+    if (!word || !input) return;
 
-    const previous = getAssignedWord(input);
-    if (previous && previous.wordId !== word.id) {
-      bumpUsage(previous.wordId, -1);
-    }
+    const previousWordId = getAssignedWordId(input);
+    const targetAlreadyUsesThisWord = previousWordId === word.id;
 
-    assignMetaToInput(input, word.id);
-    bumpUsage(word.id, previous?.wordId === word.id ? 0 : 1);
+    const usage = state.usageByWordId.get(word.id) || 0;
+    const wordAlreadyUsedElsewhere = usage > 0 && !targetAlreadyUsesThisWord;
+    if (wordAlreadyUsedElsewhere) return;
+
+    setAssignedWordId(input, word.id);
+    state.assignmentByInput.set(input, { wordId: word.id });
 
     setInputValue(input, word.text);
     updateClearButton(input);
+
+    recomputeAssignmentsAndUsage();
     updateWordVisualState();
   }
 
@@ -281,9 +299,7 @@
     if (!state.enabled) return;
 
     let target = state.activeInput;
-    if (!target || !target.isConnected) {
-      target = findInputs()[0] || null;
-    }
+    if (!target || !target.isConnected) target = findInputs()[0] || null;
     if (!target) return;
 
     assignWordToInput(word, target);
@@ -297,7 +313,7 @@
       const id = `${idx}:${text.toLowerCase()}`;
 
       li.classList.add('wuep-word-item');
-      li.style.position = li.style.position || 'relative';
+      if (!li.style.position) li.style.position = 'relative';
       li.style.cursor = 'pointer';
       li.style.userSelect = 'none';
 
@@ -306,24 +322,9 @@
         badge = document.createElement('span');
         badge.className = 'wuep-word-badge';
         badge.hidden = true;
-        badge.style.position = 'absolute';
-        badge.style.top = '-6px';
-        badge.style.right = '-6px';
-        badge.style.minWidth = '16px';
-        badge.style.height = '16px';
-        badge.style.borderRadius = '999px';
-        badge.style.background = '#ef4444';
-        badge.style.color = '#fff';
-        badge.style.fontSize = '10px';
-        badge.style.lineHeight = '16px';
-        badge.style.textAlign = 'center';
-        badge.style.padding = '0 4px';
-        badge.style.fontWeight = '700';
-        badge.style.boxShadow = '0 0 0 2px #fff';
-        badge.style.pointerEvents = 'none';
-        badge.style.display = 'none';
         li.appendChild(badge);
       }
+      styleBadgeElement(badge);
 
       const payload = { id, text, el: li };
       const onClick = () => handleWordClick(payload);
@@ -341,6 +342,7 @@
       item.el.style.filter = '';
       item.el.style.cursor = '';
       item.el.style.userSelect = '';
+
       if (item.onClick) item.el.removeEventListener('click', item.onClick);
       if (item.badgeEl && item.badgeEl.parentNode === item.el) item.badgeEl.remove();
     });
@@ -358,12 +360,14 @@
     window.__wuepExerciseProbe = 'disabled';
   }
 
-  function reconcileAssignments() {
+  function reconcileUI() {
     const inputs = findInputs();
     inputs.forEach((input) => {
       wrapInput(input);
       updateClearButton(input);
     });
+
+    recomputeAssignmentsAndUsage();
     updateWordVisualState();
   }
 
@@ -381,7 +385,7 @@
 
     cleanupWordInteractions();
     installWordInteractions(items);
-    reconcileAssignments();
+    reconcileUI();
 
     state.bootstrapped = true;
     window.__wuepExerciseProbe = 'snacks-mounted';
@@ -395,13 +399,13 @@
       return;
     }
 
-    if (!state.wordItems.some((w) => document.contains(w.el))) {
+    if (!state.wordItems.some((w) => w.el.isConnected)) {
       state.bootstrapped = false;
       init();
       return;
     }
 
-    reconcileAssignments();
+    reconcileUI();
   }
 
   function queueRefresh() {
@@ -434,9 +438,7 @@
 
   function bootstrap() {
     chrome.storage.sync.get([ENABLED_KEY], (res) => {
-      if (typeof res?.[ENABLED_KEY] === 'boolean') {
-        state.enabled = res[ENABLED_KEY];
-      }
+      if (typeof res?.[ENABLED_KEY] === 'boolean') state.enabled = res[ENABLED_KEY];
 
       startObserver();
       if (state.enabled) queueRefresh();
@@ -445,9 +447,7 @@
       if (chrome?.storage?.onChanged) {
         chrome.storage.onChanged.addListener((changes, area) => {
           if (area !== 'sync') return;
-          if (changes[ENABLED_KEY]) {
-            setEnabled(Boolean(changes[ENABLED_KEY].newValue));
-          }
+          if (changes[ENABLED_KEY]) setEnabled(Boolean(changes[ENABLED_KEY].newValue));
         });
       }
     });
