@@ -3,6 +3,7 @@
 
   const ENABLED_KEY = 'wuep_enabled';
   const ASSIGN_ATTR = 'data-wuep-word-id';
+  const REORDER_STORAGE_KEY = `wuep_reorder_state:${location.pathname}`;
 
   if (!/\/snacks\//i.test(location.pathname)) {
     window.__wuepExerciseProbe = 'loaded-non-snacks';
@@ -12,12 +13,18 @@
 
   const state = {
     enabled: true,
+    mode: null, // 'reorder' | 'word-list'
+    bootstrapped: false,
+
+    // word-list mode
     activeInput: null,
     wordItems: [],
-    assignmentByInput: new WeakMap(), // input -> { wordId }
+    assignmentByInput: new WeakMap(),
     usageByWordId: new Map(),
     boundInputs: new WeakMap(),
-    bootstrapped: false
+
+    // reorder mode
+    reorderItems: []
   };
 
   let observer = null;
@@ -69,19 +76,6 @@
     return candidates.filter((el) => isEditableTarget(el) && isVisibleElement(el));
   }
 
-  function findWordList() {
-    const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
-
-    for (const list of lists) {
-      const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
-      if (items.length < 2) continue;
-      const words = items.map((li) => normalize(li.textContent));
-      if (words.every((w) => w && isWordLike(w))) return items;
-    }
-
-    return [];
-  }
-
   function setCaretToEnd(input) {
     try {
       if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
@@ -117,6 +111,219 @@
     if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) return normalize(input.value);
     if (input instanceof HTMLElement && input.getAttribute('contenteditable') === 'true') return normalize(input.textContent);
     return '';
+  }
+
+  // ------------------------
+  // Reorder mode (Duolingo-style)
+  // ------------------------
+
+  function findReorderContainers() {
+    return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
+      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
+      const input = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
+      return Boolean(textEl && input);
+    });
+  }
+
+  function parseTokens(raw) {
+    const cleaned = normalize(raw).replace(/^\?\s*/, '');
+    return cleaned
+      .split('|')
+      .map((s) => normalize(s.replace(/^\?\s*/, '')))
+      .filter(Boolean);
+  }
+
+  function loadReorderPersisted() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(REORDER_STORAGE_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveReorderPersisted() {
+    try {
+      const payload = {};
+      state.reorderItems.forEach((item) => {
+        payload[item.id] = item.tokens;
+      });
+      localStorage.setItem(REORDER_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  }
+
+  function renderReorderBank(item) {
+    if (!item.bankEl) return;
+
+    item.bankEl.innerHTML = '';
+    item.tokens.forEach((token, idx) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'wuep-reorder-chip';
+      chip.textContent = token;
+      chip.draggable = true;
+      chip.dataset.index = String(idx);
+
+      chip.addEventListener('dragstart', (event) => {
+        chip.classList.add('wuep-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', JSON.stringify({ itemId: item.id, from: idx }));
+      });
+
+      chip.addEventListener('dragend', () => {
+        chip.classList.remove('wuep-dragging');
+        item.bankEl.querySelectorAll('.wuep-drop-target').forEach((el) => el.classList.remove('wuep-drop-target'));
+      });
+
+      chip.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        chip.classList.add('wuep-drop-target');
+      });
+
+      chip.addEventListener('dragleave', () => chip.classList.remove('wuep-drop-target'));
+
+      chip.addEventListener('drop', (event) => {
+        event.preventDefault();
+        chip.classList.remove('wuep-drop-target');
+
+        let payload = null;
+        try {
+          payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+        } catch {
+          return;
+        }
+
+        if (!payload || payload.itemId !== item.id) return;
+        const from = Number(payload.from);
+        const to = idx;
+        if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
+
+        const next = [...item.tokens];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        item.tokens = next;
+
+        applyReorderItemToInput(item);
+        renderReorderBank(item);
+        saveReorderPersisted();
+      });
+
+      item.bankEl.appendChild(chip);
+    });
+
+    if (!item.bankEl.dataset.wuepDnDBound) {
+      item.bankEl.addEventListener('dragover', (event) => {
+        event.preventDefault();
+      });
+
+      item.bankEl.addEventListener('drop', (event) => {
+        const target = event.target;
+        if (target?.classList?.contains('wuep-reorder-chip')) return;
+
+        let payload = null;
+        try {
+          payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+        } catch {
+          return;
+        }
+
+        if (!payload || payload.itemId !== item.id) return;
+        const from = Number(payload.from);
+        if (!Number.isInteger(from)) return;
+
+        const next = [...item.tokens];
+        const [moved] = next.splice(from, 1);
+        next.push(moved);
+        item.tokens = next;
+
+        applyReorderItemToInput(item);
+        renderReorderBank(item);
+        saveReorderPersisted();
+      });
+
+      item.bankEl.dataset.wuepDnDBound = '1';
+    }
+  }
+
+  function applyReorderItemToInput(item) {
+    const sentence = item.tokens.join(' ');
+    setInputValue(item.inputEl, sentence);
+  }
+
+  function mountReorderMode() {
+    const containers = findReorderContainers();
+    if (!containers.length) return false;
+
+    const persisted = loadReorderPersisted();
+
+    state.reorderItems = containers.map((container, idx) => {
+      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
+      const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
+      const raw = textEl ? textEl.textContent || '' : '';
+      const baseTokens = parseTokens(raw);
+      const id = `${idx}`;
+
+      const savedTokens = Array.isArray(persisted[id]) ? persisted[id].map((x) => normalize(String(x))) : null;
+      const hasSameTokenCount = savedTokens && savedTokens.length === baseTokens.length;
+      const tokens = hasSameTokenCount ? savedTokens : baseTokens;
+
+      if (textEl) {
+        textEl.dataset.wuepOriginal = raw;
+        textEl.textContent = '?';
+      }
+
+      let bankEl = container.querySelector('.wuep-reorder-bank');
+      if (!bankEl) {
+        bankEl = document.createElement('div');
+        bankEl.className = 'wuep-reorder-bank';
+        container.appendChild(bankEl);
+      }
+
+      return { id, container, textEl, inputEl, bankEl, tokens };
+    });
+
+    state.reorderItems.forEach((item) => {
+      renderReorderBank(item);
+      applyReorderItemToInput(item);
+    });
+    saveReorderPersisted();
+
+    state.mode = 'reorder';
+    window.__wuepExerciseProbe = 'snacks-mounted-reorder';
+    return true;
+  }
+
+  function teardownReorderMode() {
+    state.reorderItems.forEach((item) => {
+      if (item.textEl) {
+        const original = item.textEl.dataset.wuepOriginal;
+        if (typeof original === 'string') item.textEl.textContent = original;
+        delete item.textEl.dataset.wuepOriginal;
+      }
+
+      if (item.bankEl?.parentNode) item.bankEl.remove();
+    });
+
+    state.reorderItems = [];
+  }
+
+  // ------------------------
+  // Word-list mode (existing)
+  // ------------------------
+
+  function findWordList() {
+    const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
+
+    for (const list of lists) {
+      const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
+      if (items.length < 2) continue;
+      const words = items.map((li) => normalize(li.textContent));
+      if (words.every((w) => w && isWordLike(w))) return items;
+    }
+
+    return [];
   }
 
   function getClearBtn(input) {
@@ -240,9 +447,7 @@
       };
 
       const onInput = () => {
-        if (!readInputText(input)) {
-          clearAssignment(input);
-        }
+        if (!readInputText(input)) clearAssignment(input);
         updateClearButton(input);
         recomputeAssignmentsAndUsage();
         updateWordVisualState();
@@ -269,10 +474,6 @@
     if (!wrap || !wrap.parentNode) return;
     wrap.parentNode.insertBefore(input, wrap);
     wrap.remove();
-  }
-
-  function findWordById(wordId) {
-    return state.wordItems.find((w) => w.id === wordId) || null;
   }
 
   function assignWordToInput(word, input) {
@@ -352,15 +553,7 @@
     state.assignmentByInput = new WeakMap();
   }
 
-  function teardownUI() {
-    cleanupWordInteractions();
-    findInputs().forEach((input) => unwrapInput(input));
-    state.activeInput = null;
-    state.bootstrapped = false;
-    window.__wuepExerciseProbe = 'disabled';
-  }
-
-  function reconcileUI() {
+  function reconcileWordListMode() {
     const inputs = findInputs();
     inputs.forEach((input) => {
       wrapInput(input);
@@ -371,24 +564,53 @@
     updateWordVisualState();
   }
 
+  function mountWordListMode() {
+    const items = findWordList();
+    if (!items.length) return false;
+
+    cleanupWordInteractions();
+    installWordInteractions(items);
+    reconcileWordListMode();
+
+    state.mode = 'word-list';
+    window.__wuepExerciseProbe = 'snacks-mounted-word-list';
+    return true;
+  }
+
+  // ------------------------
+  // Lifecycle
+  // ------------------------
+
+  function teardownUI() {
+    teardownReorderMode();
+    cleanupWordInteractions();
+    findInputs().forEach((input) => unwrapInput(input));
+
+    state.activeInput = null;
+    state.mode = null;
+    state.bootstrapped = false;
+    window.__wuepExerciseProbe = 'disabled';
+  }
+
   function init() {
     if (!state.enabled) {
       teardownUI();
       return;
     }
 
-    const items = findWordList();
-    if (!items.length) {
-      window.__wuepExerciseProbe = 'snacks-no-word-list-yet';
+    teardownUI();
+
+    if (mountReorderMode()) {
+      state.bootstrapped = true;
       return;
     }
 
-    cleanupWordInteractions();
-    installWordInteractions(items);
-    reconcileUI();
+    if (mountWordListMode()) {
+      state.bootstrapped = true;
+      return;
+    }
 
-    state.bootstrapped = true;
-    window.__wuepExerciseProbe = 'snacks-mounted';
+    window.__wuepExerciseProbe = 'snacks-no-known-pattern-yet';
   }
 
   function refreshIfNeeded() {
@@ -399,13 +621,26 @@
       return;
     }
 
-    if (!state.wordItems.some((w) => w.el.isConnected)) {
-      state.bootstrapped = false;
-      init();
+    if (state.mode === 'reorder') {
+      if (!state.reorderItems.some((item) => item.container?.isConnected)) {
+        state.bootstrapped = false;
+        init();
+      }
       return;
     }
 
-    reconcileUI();
+    if (state.mode === 'word-list') {
+      if (!state.wordItems.some((w) => w.el.isConnected)) {
+        state.bootstrapped = false;
+        init();
+        return;
+      }
+      reconcileWordListMode();
+      return;
+    }
+
+    state.bootstrapped = false;
+    init();
   }
 
   function queueRefresh() {

@@ -65,3 +65,31 @@
 .wuep-clear-btn[hidden] {
   display: none;
 }
+
+.wuep-reorder-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wuep-reorder-chip {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.1;
+  cursor: grab;
+  user-select: none;
+}
+
+.wuep-reorder-chip.wuep-dragging {
+  opacity: 0.55;
+}
+
+.wuep-reorder-chip.wuep-drop-target {
+  border-color: #5dadbc;
+  box-shadow: 0 0 0 2px rgba(93, 173, 188, 0.2);
+}
