@@ -71,6 +71,9 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+  width: 100%;
+  flex-basis: 100%;
+  clear: both;
 }
 
 .wuep-reorder-chip {

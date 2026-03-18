@@ -278,7 +278,13 @@
       if (!bankEl) {
         bankEl = document.createElement('div');
         bankEl.className = 'wuep-reorder-bank';
-        container.appendChild(bankEl);
+
+        const anchor = container.querySelector('.fill-gap') || inputEl?.closest('.fill-gap') || inputEl?.parentElement;
+        if (anchor && anchor.parentNode) {
+          anchor.parentNode.insertBefore(bankEl, anchor.nextSibling);
+        } else {
+          container.appendChild(bankEl);
+        }
       }
 
       return { id, container, textEl, inputEl, bankEl, tokens };
