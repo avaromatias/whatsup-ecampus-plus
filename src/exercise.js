@@ -261,6 +261,7 @@
     state.reorderItems = containers.map((container, idx) => {
       const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
       const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
+      container.classList.add('wuep-reorder-container');
       const raw = textEl ? textEl.textContent || '' : '';
       const baseTokens = parseTokens(raw);
       const id = `${idx}`;
@@ -303,6 +304,8 @@
 
   function teardownReorderMode() {
     state.reorderItems.forEach((item) => {
+      item.container?.classList?.remove('wuep-reorder-container');
+
       if (item.textEl) {
         const original = item.textEl.dataset.wuepOriginal;
         if (typeof original === 'string') item.textEl.textContent = original;

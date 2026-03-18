@@ -66,14 +66,23 @@
   display: none;
 }
 
+.wuep-reorder-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 8px;
+}
+
+.wuep-reorder-container > .fill-gap {
+  width: 100%;
+}
+
 .wuep-reorder-bank {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 0;
   width: 100%;
-  flex-basis: 100%;
-  clear: both;
 }
 
 .wuep-reorder-chip {
