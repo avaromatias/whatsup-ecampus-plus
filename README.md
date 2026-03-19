@@ -1,6 +1,6 @@
 # What's Up! eCampus Plus
 
-Chrome extension that improves class discovery in the **Schedule a class** view of What's Up! eCampus.
+Chrome extension that improves UX in **Schedule a class** and selected **Snacks** exercises in What's Up! eCampus.
 
 ## Quick start
 
@@ -10,16 +10,25 @@ Chrome extension that improves class discovery in the **Schedule a class** view 
 4. Click **Load unpacked** and select this project folder.
 5. Open:
    - `https://ecampus.whatsup.es/Api/ScheduleAClass`
+   - `https://ecampus.whatsup.es/snacks/*`
 
 ## Scope
 
 The extension UI is injected only on:
 
+### Schedule module
+
 - `/Api/ScheduleAClass`
 - `/Api/ScheduleAClassSchool`
 - `/Api/ScheduleAClassLive`
 
+### Snacks module
+
+- `/snacks/*`
+
 ## What it does
+
+### Schedule UX
 
 - Adds a compact filter trigger near native schedule filters.
 - Opens a filter panel with:
@@ -30,7 +39,16 @@ The extension UI is injected only on:
 - Keeps native delivery filters (`School`, `Live`) as the source of truth.
 - Provides a popup toggle (**Enable on this site**) for runtime on/off.
 
-## Filter model
+### Snacks UX
+
+- Word ordering exercise (Duolingo-like)
+- tokens/chips drag-and-drop por oración
+- sync en tiempo real con el `snack-gap` input
+- capitaliza solo la primera palabra del input
+- Persistencia por oración
+- si el input ya viene con respuesta/corrección, no lo pisa
+
+## Filter model (Schedule)
 
 | Dimension | Managed by | Options |
 |---|---|---|
@@ -39,7 +57,7 @@ The extension UI is injected only on:
 | Days | Extension | MON / TUE / WED / THU / FRI / SAT |
 | Time Range | Extension | 09:30–21:30 |
 
-## Classification rule
+## Classification rule (Schedule)
 
 Class type is inferred from row title:
 
@@ -49,10 +67,12 @@ Class type is inferred from row title:
 ## Architecture
 
 - Manifest V3
-- Content script (`src/content.js`)
-- Content styles (`src/content.css`)
+- Schedule content script (`src/content.js`)
+- Schedule content styles (`src/content.css`)
+- Snacks content script (`src/exercise.js`)
+- Snacks content styles (`src/exercise.css`)
 - Popup UI (`popup.html`, `popup.css`, `popup.js`)
-- Persistence via `chrome.storage.sync`
+- Persistence via `chrome.storage.sync` and local snack state in `localStorage`
 
 ## Project structure
 
@@ -65,16 +85,22 @@ Class type is inferred from row title:
 ├── README.md
 └── src
     ├── content.css
-    └── content.js
+    ├── content.js
+    ├── exercise.css
+    └── exercise.js
 ```
 
 ## Troubleshooting
 
-- **Trigger not visible**
+- **Trigger not visible (Schedule)**
   - Ensure you are on one of the supported `/Api/ScheduleAClass*` routes.
   - Reload extension from `chrome://extensions`.
 
-- **Filters do not update**
+- **No aparecen chips drag-and-drop**
+  - Ensure you are on a supported `/snacks/*` exercise with word-ordering pattern.
+  - Reload extension and refresh the page.
+
+- **Filters do not update (Schedule)**
   - Toggle extension OFF/ON from popup.
   - Refresh the eCampus page.
 
@@ -83,12 +109,11 @@ Class type is inferred from row title:
 
 ## Limitations
 
-- Class type detection depends on title text.
-- DOM changes in eCampus may require selector updates.
+- Class type detection depends on schedule row title text.
+- Snacks enhancements target known word-ordering structures; major DOM changes in eCampus may require selector updates.
 
 ## Safety
 
 - No schedule/cancel automation.
 - No button auto-clicking.
-- Row visibility changes only.
-
+- UI/DOM assistance only.
