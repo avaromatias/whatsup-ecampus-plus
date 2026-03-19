@@ -130,7 +130,27 @@
     return cleaned
       .split('|')
       .map((s) => normalize(s.replace(/^\?\s*/, '')))
-      .filter(Boolean);
+      .filter((token) => token && token !== '.');
+  }
+
+  function parseInputTokens(raw) {
+    const cleaned = normalize(raw)
+      .replace(/^\?\s*/, '')
+      .replace(/\?$/g, '')
+      .replace(/\.$/g, '');
+
+    return cleaned
+      .split(/\s+/)
+      .map((s) => normalize(s))
+      .filter((token) => token && token !== '.');
+  }
+
+  function toSentence(tokens) {
+    const next = [...tokens];
+    if (next.length) {
+      next[0] = next[0].charAt(0).toUpperCase() + next[0].slice(1);
+    }
+    return next.join(' ');
   }
 
   function loadReorderPersisted() {
@@ -248,7 +268,7 @@
   }
 
   function applyReorderItemToInput(item) {
-    const sentence = item.tokens.join(' ');
+    const sentence = toSentence(item.tokens);
     setInputValue(item.inputEl, sentence);
   }
 
@@ -266,9 +286,21 @@
       const baseTokens = parseTokens(raw);
       const id = `${idx}`;
 
-      const savedTokens = Array.isArray(persisted[id]) ? persisted[id].map((x) => normalize(String(x))) : null;
-      const hasSameTokenCount = savedTokens && savedTokens.length === baseTokens.length;
-      const tokens = hasSameTokenCount ? savedTokens : baseTokens;
+      const savedTokens = Array.isArray(persisted[id]) ? persisted[id].map((x) => normalize(String(x))).filter((t) => t && t !== '.') : null;
+      const inputExistingValue = readInputText(inputEl);
+      const existingTokens = inputExistingValue ? parseInputTokens(inputExistingValue) : null;
+
+      const hasSameTokenCount = (candidate) => Array.isArray(candidate) && candidate.length === baseTokens.length;
+
+      let tokens = baseTokens;
+      let keepCurrentInput = false;
+
+      if (hasSameTokenCount(existingTokens)) {
+        tokens = existingTokens;
+        keepCurrentInput = true;
+      } else if (hasSameTokenCount(savedTokens)) {
+        tokens = savedTokens;
+      }
 
       if (textEl) {
         textEl.dataset.wuepOriginal = raw;
@@ -288,12 +320,14 @@
         }
       }
 
-      return { id, container, textEl, inputEl, bankEl, tokens };
+      return { id, container, textEl, inputEl, bankEl, tokens, keepCurrentInput };
     });
 
     state.reorderItems.forEach((item) => {
       renderReorderBank(item);
-      applyReorderItemToInput(item);
+      if (!item.keepCurrentInput) {
+        applyReorderItemToInput(item);
+      }
     });
     saveReorderPersisted();
 
