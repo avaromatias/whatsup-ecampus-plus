@@ -41,12 +41,25 @@ The extension UI is injected only on:
 
 ### Snacks UX
 
-- Word ordering exercise (Duolingo-like)
-- tokens/chips drag-and-drop per sentence
-- real-time sync with the `snack-gap` input
-- capitalizes only the first word in the input
-- per-sentence persistence
-- if the input already has a saved/corrected answer, it is not overwritten
+#### Word selection and gap filling
+
+- Enables click-to-fill for word-bank style exercises.
+- Auto-fills the active `snack-gap` input with the selected word.
+- Supports `contenteditable`, text inputs, and textarea-like editable targets.
+- Marks words as used after assignment.
+- Preserves used-state when the input text is edited, and releases it only when the input is cleared.
+- Allows repeated-word tracking via usage count badges when a word is used in multiple sentences.
+- Shows a clear (`×`) button for each wrapped editable input.
+- Clears the assignment and restores word availability when the input is cleared.
+
+#### Word ordering (Duolingo-like)
+
+- Converts word-ordering prompts into draggable token chips per sentence.
+- Syncs token order in real time with the `snack-gap` input.
+- Capitalizes only the first word in the generated input sentence.
+- Preserves original token casing in draggable chips.
+- Persists per-sentence token order for each snack route.
+- Does not overwrite inputs that already contain a saved/corrected answer.
 
 ## Filter model (Schedule)
 
@@ -92,15 +105,15 @@ Class type is inferred from row title:
 
 ## Troubleshooting
 
-- **Trigger not visible (Schedule)**
+- **Trigger not visible (Schedule).**
   - Ensure you are on one of the supported `/Api/ScheduleAClass*` routes.
   - Reload extension from `chrome://extensions`.
 
-- **Drag-and-drop chips do not appear**
-  - Ensure you are on a supported `/snacks/*` exercise with word-ordering pattern.
-  - Reload extension and refresh the page.
+- **Drag-and-drop chips do not appear (Snacks).**
+  - Ensure you are on a supported `/snacks/*` exercise with a word-ordering pattern.
+  - Reload the extension and refresh the page.
 
-- **Filters do not update (Schedule)**
+- **Filters do not update (Schedule).**
   - Toggle extension OFF/ON from popup.
   - Refresh the eCampus page.
 
