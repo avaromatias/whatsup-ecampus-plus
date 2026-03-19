@@ -125,12 +125,18 @@
     });
   }
 
+  function cleanToken(token) {
+    return normalize(token)
+      .replace(/^[¿?¡!.,;:]+/, '')
+      .replace(/[¿?¡!.,;:]+$/g, '');
+  }
+
   function parseTokens(raw) {
     const cleaned = normalize(raw).replace(/^\?\s*/, '');
     return cleaned
       .split('|')
-      .map((s) => normalize(s.replace(/^\?\s*/, '')))
-      .filter((token) => token && token !== '.');
+      .map((s) => cleanToken(s.replace(/^\?\s*/, '')))
+      .filter(Boolean);
   }
 
   function parseInputTokens(raw) {
@@ -141,8 +147,8 @@
 
     return cleaned
       .split(/\s+/)
-      .map((s) => normalize(s))
-      .filter((token) => token && token !== '.');
+      .map((s) => cleanToken(s))
+      .filter(Boolean);
   }
 
   function toSentence(tokens) {
