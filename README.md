@@ -42,11 +42,11 @@ The extension UI is injected only on:
 ### Snacks UX
 
 - Word ordering exercise (Duolingo-like)
-- tokens/chips drag-and-drop por oración
-- sync en tiempo real con el `snack-gap` input
-- capitaliza solo la primera palabra del input
-- Persistencia por oración
-- si el input ya viene con respuesta/corrección, no lo pisa
+- tokens/chips drag-and-drop per sentence
+- real-time sync with the `snack-gap` input
+- capitalizes only the first word in the input
+- per-sentence persistence
+- if the input already has a saved/corrected answer, it is not overwritten
 
 ## Filter model (Schedule)
 
@@ -96,7 +96,7 @@ Class type is inferred from row title:
   - Ensure you are on one of the supported `/Api/ScheduleAClass*` routes.
   - Reload extension from `chrome://extensions`.
 
-- **No aparecen chips drag-and-drop**
+- **Drag-and-drop chips do not appear**
   - Ensure you are on a supported `/snacks/*` exercise with word-ordering pattern.
   - Reload extension and refresh the page.
 
