@@ -1,6 +1,6 @@
 # What's Up! eCampus Plus
 
-Chrome extension that improves class discovery in the **Schedule a class** view of What's Up! eCampus.
+Chrome extension that improves UX in **Schedule a class** and selected **Snacks** exercises in What's Up! eCampus.
 
 ## Quick start
 
@@ -10,16 +10,25 @@ Chrome extension that improves class discovery in the **Schedule a class** view 
 4. Click **Load unpacked** and select this project folder.
 5. Open:
    - `https://ecampus.whatsup.es/Api/ScheduleAClass`
+   - `https://ecampus.whatsup.es/snacks/*`
 
 ## Scope
 
 The extension UI is injected only on:
 
+### Schedule module
+
 - `/Api/ScheduleAClass`
 - `/Api/ScheduleAClassSchool`
 - `/Api/ScheduleAClassLive`
 
+### Snacks module
+
+- `/snacks/*`
+
 ## What it does
+
+### Schedule UX
 
 - Adds a compact filter trigger near native schedule filters.
 - Opens a filter panel with:
@@ -30,7 +39,29 @@ The extension UI is injected only on:
 - Keeps native delivery filters (`School`, `Live`) as the source of truth.
 - Provides a popup toggle (**Enable on this site**) for runtime on/off.
 
-## Filter model
+### Snacks UX
+
+#### Word selection and gap filling
+
+- Enables click-to-fill for word-bank style exercises.
+- Auto-fills the active `snack-gap` input with the selected word.
+- Supports `contenteditable`, text inputs, and textarea-like editable targets.
+- Marks words as used after assignment.
+- Preserves used-state when the input text is edited, and releases it only when the input is cleared.
+- Allows repeated-word tracking via usage count badges when a word is used in multiple sentences.
+- Shows a clear (`×`) button for each wrapped editable input.
+- Clears the assignment and restores word availability when the input is cleared.
+
+#### Word ordering (Duolingo-like)
+
+- Converts word-ordering prompts into draggable token chips per sentence.
+- Syncs token order in real time with the `snack-gap` input.
+- Capitalizes only the first word in the generated input sentence.
+- Preserves original token casing in draggable chips.
+- Persists per-sentence token order for each snack route.
+- Does not overwrite inputs that already contain a saved/corrected answer.
+
+## Filter model (Schedule)
 
 | Dimension | Managed by | Options |
 |---|---|---|
@@ -39,7 +70,7 @@ The extension UI is injected only on:
 | Days | Extension | MON / TUE / WED / THU / FRI / SAT |
 | Time Range | Extension | 09:30–21:30 |
 
-## Classification rule
+## Classification rule (Schedule)
 
 Class type is inferred from row title:
 
@@ -49,10 +80,12 @@ Class type is inferred from row title:
 ## Architecture
 
 - Manifest V3
-- Content script (`src/content.js`)
-- Content styles (`src/content.css`)
+- Schedule content script (`src/content.js`)
+- Schedule content styles (`src/content.css`)
+- Snacks content script (`src/exercise.js`)
+- Snacks content styles (`src/exercise.css`)
 - Popup UI (`popup.html`, `popup.css`, `popup.js`)
-- Persistence via `chrome.storage.sync`
+- Persistence via `chrome.storage.sync` and local snack state in `localStorage`
 
 ## Project structure
 
@@ -65,16 +98,22 @@ Class type is inferred from row title:
 ├── README.md
 └── src
     ├── content.css
-    └── content.js
+    ├── content.js
+    ├── exercise.css
+    └── exercise.js
 ```
 
 ## Troubleshooting
 
-- **Trigger not visible**
+- **Trigger not visible (Schedule).**
   - Ensure you are on one of the supported `/Api/ScheduleAClass*` routes.
   - Reload extension from `chrome://extensions`.
 
-- **Filters do not update**
+- **Drag-and-drop chips do not appear (Snacks).**
+  - Ensure you are on a supported `/snacks/*` exercise with a word-ordering pattern.
+  - Reload the extension and refresh the page.
+
+- **Filters do not update (Schedule).**
   - Toggle extension OFF/ON from popup.
   - Refresh the eCampus page.
 
@@ -83,12 +122,11 @@ Class type is inferred from row title:
 
 ## Limitations
 
-- Class type detection depends on title text.
-- DOM changes in eCampus may require selector updates.
+- Class type detection depends on schedule row title text.
+- Snacks enhancements target known word-ordering structures; major DOM changes in eCampus may require selector updates.
 
 ## Safety
 
 - No schedule/cancel automation.
 - No button auto-clicking.
-- Row visibility changes only.
-
+- UI/DOM assistance only.

@@ -18,6 +18,18 @@
         "src/content.css"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://ecampus.whatsup.es/*"
+      ],
+      "js": [
+        "src/exercise.js"
+      ],
+      "css": [
+        "src/exercise.css"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "permissions": [
