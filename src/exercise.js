@@ -126,9 +126,8 @@
   }
 
   function cleanToken(token) {
-    return normalize(token)
-      .replace(/^[¿?¡!.,;:]+/, '')
-      .replace(/[¿?¡!.,;:]+$/g, '');
+    const leftTrimmed = normalize(token).replace(/^[¿?¡!.,;:]+/, '');
+    return normalize(leftTrimmed);
   }
 
   function parseTokens(raw) {
@@ -324,6 +323,8 @@
       } else if (hasSameTokenCount(savedTokens)) {
         tokens = remapWithBaseCasing(savedTokens, baseTokens);
       }
+
+      tokens = remapWithBaseCasing(tokens, baseTokens);
 
       if (textEl) {
         textEl.dataset.wuepOriginal = raw;
