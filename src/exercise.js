@@ -153,6 +153,23 @@
     return next.join(' ');
   }
 
+  function remapWithBaseCasing(candidateTokens, baseTokens) {
+    const pools = new Map();
+
+    baseTokens.forEach((token) => {
+      const key = token.toLowerCase();
+      if (!pools.has(key)) pools.set(key, []);
+      pools.get(key).push(token);
+    });
+
+    return candidateTokens.map((token) => {
+      const key = token.toLowerCase();
+      const pool = pools.get(key);
+      if (pool && pool.length) return pool.shift();
+      return token;
+    });
+  }
+
   function loadReorderPersisted() {
     try {
       const parsed = JSON.parse(localStorage.getItem(REORDER_STORAGE_KEY) || '{}');
@@ -296,10 +313,10 @@
       let keepCurrentInput = false;
 
       if (hasSameTokenCount(existingTokens)) {
-        tokens = existingTokens;
+        tokens = remapWithBaseCasing(existingTokens, baseTokens);
         keepCurrentInput = true;
       } else if (hasSameTokenCount(savedTokens)) {
-        tokens = savedTokens;
+        tokens = remapWithBaseCasing(savedTokens, baseTokens);
       }
 
       if (textEl) {
