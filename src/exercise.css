@@ -11,7 +11,8 @@
   filter: grayscale(0.35);
 }
 
-.wuep-word-badge {
+.wuep-word-item.wuep-word-has-badge::after {
+  content: attr(data-wuep-usage);
   position: absolute;
   top: -6px;
   right: -6px;
