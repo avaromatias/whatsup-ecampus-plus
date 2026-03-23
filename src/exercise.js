@@ -474,11 +474,23 @@
     badge.textContent = visible ? String(count) : '';
   }
 
+  function getEmptyInputsCount() {
+    return findInputs().filter((input) => !readInputText(input)).length;
+  }
+
+  function shouldMarkWordsAsUsed() {
+    const remainingInputs = getEmptyInputsCount();
+    const availableWords = state.wordItems.filter((item) => (state.usageByWordId.get(item.id) || 0) === 0).length;
+    return availableWords >= remainingInputs;
+  }
+
   function updateWordVisualState() {
+    const markAsUsed = shouldMarkWordsAsUsed();
+
     state.wordItems.forEach((item) => {
       const count = state.usageByWordId.get(item.id) || 0;
-      const used = count > 0;
-      item.used = used;
+      const used = markAsUsed && count > 0;
+      item.used = count > 0;
 
       item.el.classList.toggle('wuep-word-used', used);
       item.el.style.opacity = used ? '0.45' : '';
@@ -545,13 +557,6 @@
 
   function assignWordToInput(word, input) {
     if (!word || !input) return;
-
-    const previousWordId = getAssignedWordId(input);
-    const targetAlreadyUsesThisWord = previousWordId === word.id;
-
-    const usage = state.usageByWordId.get(word.id) || 0;
-    const wordAlreadyUsedElsewhere = usage > 0 && !targetAlreadyUsesThisWord;
-    if (wordAlreadyUsedElsewhere) return;
 
     setAssignedWordId(input, word.id);
     state.assignmentByInput.set(input, { wordId: word.id });
