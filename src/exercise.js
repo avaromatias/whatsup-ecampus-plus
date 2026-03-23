@@ -540,6 +540,14 @@
   function assignWordToInput(word, input) {
     if (!word || !input) return;
 
+    const previousWordId = getAssignedWordId(input);
+    const targetAlreadyUsesThisWord = previousWordId === word.id;
+    const usage = state.usageByWordId.get(word.id) || 0;
+
+    if (shouldMarkWordsAsUsed() && usage > 0 && !targetAlreadyUsesThisWord) {
+      return;
+    }
+
     setAssignedWordId(input, word.id);
     state.assignmentByInput.set(input, { wordId: word.id });
 
