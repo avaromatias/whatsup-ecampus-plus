@@ -446,32 +446,14 @@
     updateWordVisualState();
   }
 
-  function styleBadgeElement(badge) {
-    badge.style.position = 'absolute';
-    badge.style.top = '-6px';
-    badge.style.right = '-6px';
-    badge.style.minWidth = '16px';
-    badge.style.height = '16px';
-    badge.style.borderRadius = '999px';
-    badge.style.background = '#ef4444';
-    badge.style.color = '#fff';
-    badge.style.fontSize = '10px';
-    badge.style.lineHeight = '16px';
-    badge.style.textAlign = 'center';
-    badge.style.padding = '0 4px';
-    badge.style.fontWeight = '700';
-    badge.style.boxShadow = '0 0 0 2px #fff';
-    badge.style.pointerEvents = 'none';
-    badge.style.display = 'none';
-  }
-
   function renderWordBadge(item, count) {
-    const badge = item.badgeEl;
-    if (!badge) return;
     const visible = count > 1;
-    badge.hidden = !visible;
-    badge.style.display = visible ? 'inline-block' : 'none';
-    badge.textContent = visible ? String(count) : '';
+    item.el.classList.toggle('wuep-word-has-badge', visible);
+    if (visible) {
+      item.el.setAttribute('data-wuep-usage', String(count));
+    } else {
+      item.el.removeAttribute('data-wuep-usage');
+    }
   }
 
   function getEmptyInputsCount() {
@@ -590,26 +572,20 @@
       li.style.cursor = 'pointer';
       li.style.userSelect = 'none';
 
-      let badge = li.querySelector('.wuep-word-badge');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'wuep-word-badge';
-        badge.hidden = true;
-        li.appendChild(badge);
-      }
-      styleBadgeElement(badge);
+      li.querySelectorAll('.wuep-word-badge').forEach((badgeEl) => badgeEl.remove());
 
       const payload = { id, text, el: li };
       const onClick = () => handleWordClick(payload);
       li.addEventListener('click', onClick, { passive: true });
 
-      return { id, text, el: li, used: false, onClick, badgeEl: badge };
+      return { id, text, el: li, used: false, onClick };
     });
   }
 
   function cleanupWordInteractions() {
     state.wordItems.forEach((item) => {
-      item.el.classList.remove('wuep-word-item', 'wuep-word-used');
+      item.el.classList.remove('wuep-word-item', 'wuep-word-used', 'wuep-word-has-badge');
+      item.el.removeAttribute('data-wuep-usage');
       item.el.style.opacity = '';
       item.el.style.textDecoration = '';
       item.el.style.filter = '';
@@ -617,7 +593,6 @@
       item.el.style.userSelect = '';
 
       if (item.onClick) item.el.removeEventListener('click', item.onClick);
-      if (item.badgeEl && item.badgeEl.parentNode === item.el) item.badgeEl.remove();
     });
 
     state.wordItems = [];
