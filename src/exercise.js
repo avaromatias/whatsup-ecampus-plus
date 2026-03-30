@@ -388,11 +388,28 @@
     return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
       const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
         const text = normalize(el.textContent);
-        return text && !text.includes('|');
+        return text && !text.includes('|') && !/_{2,}/.test(text);
       });
       const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
       return Boolean(textEl && inputEl);
     });
+  }
+
+  function shouldEnableRewriteMode(containers) {
+    if (!containers.length) return false;
+
+    // Never run rewrite prefill in word-bank exercises.
+    if (findWordList().length > 0) return false;
+
+    // Defensive: avoid stepping into option-based/drag/drop snack variants.
+    const hasChoiceLikeUi = Boolean(
+      document.querySelector(
+        '.wuep-reorder-bank, .fill-container .option, .fill-container [role="option"], .fill-container .drag, .fill-container .draggable, .fill-container .dropzone, .fill-container ul li, .fill-container ol li'
+      )
+    );
+    if (hasChoiceLikeUi) return false;
+
+    return true;
   }
 
   function extractRewriteSentence(textEl) {
@@ -401,7 +418,7 @@
 
   function mountRewriteMode() {
     const containers = findRewriteContainers();
-    if (!containers.length) return false;
+    if (!shouldEnableRewriteMode(containers)) return false;
 
     state.rewriteItems = containers.map((container, idx) => {
       const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
