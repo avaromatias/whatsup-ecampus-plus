@@ -386,12 +386,17 @@
 
   function findRewriteContainers() {
     return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
-      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
+      const textEls = Array.from(container.querySelectorAll('.question-text')).filter((el) => {
         const text = normalize(el.textContent);
         return text && !text.includes('|') && !/_{2,}/.test(text);
       });
+
+      // Rewrite/transform exercises carry a single full sentence prompt.
+      // Gap-fill exercises split the sentence around the input in multiple text nodes.
+      if (textEls.length !== 1) return false;
+
       const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
-      return Boolean(textEl && inputEl);
+      return Boolean(inputEl);
     });
   }
 
@@ -423,7 +428,7 @@
     state.rewriteItems = containers.map((container, idx) => {
       const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
         const text = normalize(el.textContent);
-        return text && !text.includes('|');
+        return text && !text.includes('|') && !/_{2,}/.test(text);
       });
       const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
       const sentence = extractRewriteSentence(textEl);
