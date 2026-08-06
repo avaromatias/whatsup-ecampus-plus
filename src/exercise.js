@@ -127,15 +127,27 @@
   }
 
   function cleanToken(token) {
-    const leftTrimmed = normalize(token).replace(/^[¿?¡!.,;:]+/, '');
+    const leftTrimmed = normalize(token).replace(/^[¿?¡!.,;:…]+/, '');
     return normalize(leftTrimmed);
   }
 
+  function extractDisplayPunctuation(raw) {
+    const text = raw || '';
+    // Platform format is usually: "?\nword | word" or ".\nword | word"
+    const leading = text.match(/^\s*([¿?¡!.,;:…]+)/);
+    if (leading) return leading[1];
+
+    const trailing = text.match(/([¿?¡!.,;:…]+)\s*$/);
+    if (trailing) return trailing[1];
+
+    return '';
+  }
+
   function parseTokens(raw) {
-    const cleaned = normalize(raw).replace(/^\?\s*/, '');
+    const cleaned = normalize(raw).replace(/^[¿?¡!.,;:…]+\s*/, '');
     return cleaned
       .split('|')
-      .map((s) => cleanToken(s.replace(/^\?\s*/, '')))
+      .map((s) => cleanToken(s.replace(/^[¿?¡!.,;:…]+\s*/, '')))
       .filter(Boolean);
   }
 
@@ -329,7 +341,7 @@
 
       if (textEl) {
         textEl.dataset.wuepOriginal = raw;
-        textEl.textContent = '?';
+        textEl.textContent = extractDisplayPunctuation(raw);
       }
 
       let bankEl = container.querySelector('.wuep-reorder-bank');
