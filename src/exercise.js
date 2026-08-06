@@ -4,6 +4,7 @@
   const ENABLED_KEY = 'wuep_enabled';
   const ASSIGN_ATTR = 'data-wuep-word-id';
   const REORDER_STORAGE_KEY = `wuep_reorder_state:${location.pathname}`;
+  const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
 
   if (!/\/snacks\//i.test(location.pathname)) {
     window.__wuepExerciseProbe = 'loaded-non-snacks';
@@ -13,7 +14,7 @@
 
   const state = {
     enabled: true,
-    mode: null, // 'reorder' | 'word-list'
+    mode: null, // 'reorder' | 'rewrite' | 'word-list'
     bootstrapped: false,
 
     // word-list mode
@@ -24,7 +25,10 @@
     boundInputs: new WeakMap(),
 
     // reorder mode
-    reorderItems: []
+    reorderItems: [],
+
+    // rewrite mode
+    rewriteItems: []
   };
 
   let observer = null;
@@ -390,6 +394,84 @@
   }
 
   // ------------------------
+  // Rewrite mode (sentence prefill)
+  // ------------------------
+
+  function findRewriteContainers() {
+    return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
+      const textEls = Array.from(container.querySelectorAll('.question-text')).filter((el) => {
+        const text = normalize(el.textContent);
+        return text && !text.includes('|') && !/_{2,}/.test(text);
+      });
+
+      // Rewrite/transform exercises carry a single full sentence prompt.
+      // Gap-fill exercises split the sentence around the input in multiple text nodes.
+      if (textEls.length !== 1) return false;
+
+      const inputEl = container.querySelector(
+        'snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea'
+      );
+      return Boolean(inputEl);
+    });
+  }
+
+  function shouldEnableRewriteMode(containers) {
+    if (!containers.length) return false;
+
+    // Never run rewrite prefill in word-bank exercises.
+    if (findWordList().length > 0) return false;
+
+    // Defensive: avoid stepping into option-based/drag/drop snack variants.
+    const hasChoiceLikeUi = Boolean(
+      document.querySelector(
+        '.wuep-reorder-bank, .fill-container .option, .fill-container [role="option"], .fill-container .drag, .fill-container .draggable, .fill-container .dropzone, .fill-container ul li, .fill-container ol li'
+      )
+    );
+    if (hasChoiceLikeUi) return false;
+
+    return true;
+  }
+
+  function extractRewriteSentence(textEl) {
+    return normalize(textEl?.textContent || '');
+  }
+
+  function mountRewriteMode() {
+    const containers = findRewriteContainers();
+    if (!shouldEnableRewriteMode(containers)) return false;
+
+    state.rewriteItems = containers.map((container, idx) => {
+      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
+        const text = normalize(el.textContent);
+        return text && !text.includes('|') && !/_{2,}/.test(text);
+      });
+      const inputEl = container.querySelector(
+        'snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea'
+      );
+      const sentence = extractRewriteSentence(textEl);
+
+      if (inputEl && sentence && !readInputText(inputEl) && !inputEl.hasAttribute(REWRITE_PREFILL_ATTR)) {
+        setInputValue(inputEl, sentence);
+      }
+
+      if (inputEl) inputEl.setAttribute(REWRITE_PREFILL_ATTR, '1');
+
+      return { id: `${idx}`, container, textEl, inputEl, sentence };
+    });
+
+    state.mode = 'rewrite';
+    window.__wuepExerciseProbe = 'snacks-mounted-rewrite';
+    return true;
+  }
+
+  function teardownRewriteMode() {
+    state.rewriteItems.forEach((item) => {
+      item.inputEl?.removeAttribute(REWRITE_PREFILL_ATTR);
+    });
+    state.rewriteItems = [];
+  }
+
+  // ------------------------
   // Word-list mode (existing)
   // ------------------------
 
@@ -693,6 +775,7 @@
 
   function teardownUI() {
     teardownReorderMode();
+    teardownRewriteMode();
     cleanupWordInteractions();
     findInputs().forEach((input) => unwrapInput(input));
 
@@ -715,6 +798,11 @@
       return;
     }
 
+    if (mountRewriteMode()) {
+      state.bootstrapped = true;
+      return;
+    }
+
     if (mountWordListMode()) {
       state.bootstrapped = true;
       return;
@@ -733,6 +821,14 @@
 
     if (state.mode === 'reorder') {
       if (!state.reorderItems.some((item) => item.container?.isConnected)) {
+        state.bootstrapped = false;
+        init();
+      }
+      return;
+    }
+
+    if (state.mode === 'rewrite') {
+      if (!state.rewriteItems.some((item) => item.container?.isConnected)) {
         state.bootstrapped = false;
         init();
       }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "What's Up! eCampus Plus",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Adds multi-filter support to the eCampus Schedule a Class screen.",
   "action": {
     "default_popup": "popup.html"
