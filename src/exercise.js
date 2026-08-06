@@ -33,7 +33,8 @@
   const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
   function isWordLike(text) {
-    return /^[a-zA-Z][a-zA-Z'’-]{0,30}$/.test(text);
+    // Answer banks often include short phrases ("use to", "was studying"), not only single tokens.
+    return /^[a-zA-Z][a-zA-Z'’-]{0,30}(?:\s+[a-zA-Z][a-zA-Z'’-]{0,30}){0,4}$/.test(text);
   }
 
   function deepFindAll(predicate) {
@@ -382,8 +383,15 @@
 
   function findWordList() {
     const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
+    const preferred = [];
+    const rest = [];
 
-    for (const list of lists) {
+    lists.forEach((list) => {
+      if (/\banswer\b/i.test(list.className || '')) preferred.push(list);
+      else rest.push(list);
+    });
+
+    for (const list of [...preferred, ...rest]) {
       const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
       if (items.length < 2) continue;
       const words = items.map((li) => normalize(li.textContent));
@@ -538,14 +546,14 @@
   }
 
   function assignWordToInput(word, input) {
-    if (!word || !input) return;
+    if (!word || !input) return false;
 
     const previousWordId = getAssignedWordId(input);
     const targetAlreadyUsesThisWord = previousWordId === word.id;
     const usage = state.usageByWordId.get(word.id) || 0;
 
     if (shouldMarkWordsAsUsed() && usage > 0 && !targetAlreadyUsesThisWord) {
-      return;
+      return false;
     }
 
     setAssignedWordId(input, word.id);
@@ -556,16 +564,51 @@
 
     recomputeAssignmentsAndUsage();
     updateWordVisualState();
+    return true;
+  }
+
+  function findNextFillTarget() {
+    const inputs = findInputs();
+    if (!inputs.length) return null;
+
+    const focused =
+      document.activeElement && inputs.includes(document.activeElement) ? document.activeElement : null;
+    if (focused) return focused;
+
+    const active = state.activeInput?.isConnected ? state.activeInput : null;
+    if (active && !readInputText(active)) return active;
+
+    if (active) {
+      const idx = inputs.indexOf(active);
+      if (idx >= 0) {
+        const after = inputs.slice(idx + 1).find((input) => !readInputText(input));
+        if (after) return after;
+      }
+    }
+
+    return inputs.find((input) => !readInputText(input)) || null;
   }
 
   function handleWordClick(word) {
     if (!state.enabled) return;
 
-    let target = state.activeInput;
-    if (!target || !target.isConnected) target = findInputs()[0] || null;
+    const target = findNextFillTarget();
     if (!target) return;
 
-    assignWordToInput(word, target);
+    if (!assignWordToInput(word, target)) return;
+
+    const inputs = findInputs();
+    const idx = inputs.indexOf(target);
+    const nextEmpty = idx >= 0 ? inputs.slice(idx + 1).find((input) => !readInputText(input)) : null;
+
+    if (nextEmpty) {
+      state.activeInput = nextEmpty;
+      nextEmpty.focus();
+      setCaretToEnd(nextEmpty);
+      return;
+    }
+
+    state.activeInput = target;
     target.focus();
     setCaretToEnd(target);
   }
