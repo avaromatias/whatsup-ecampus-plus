@@ -2,6 +2,10 @@ const ENABLED_KEY = 'wuep_enabled';
 
 const enabledInput = document.getElementById('enabled');
 const statusEl = document.getElementById('status');
+const versionEl = document.getElementById('version');
+
+const manifestVersion = chrome.runtime.getManifest()?.version;
+if (versionEl && manifestVersion) versionEl.textContent = `v${manifestVersion}`;
 
 function setStatus(text) {
   statusEl.textContent = text;
