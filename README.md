@@ -61,6 +61,18 @@ The extension UI is injected only on:
 - Persists per-sentence token order for each snack route.
 - Does not overwrite inputs that already contain a saved/corrected answer.
 
+#### Situation script panel
+
+- Reads the dialogue from the snack Launch payload (the native SCRIPT page still comes last).
+- Shows that script in a side panel on Situation question pages (true/false and combo gaps).
+- Does not auto-answer. Hide/Show keeps the panel collapsed for the rest of the snack.
+
+#### Speech Lab dictation prefill
+
+- Stores the written sentences from Speech Lab page 1.
+- Prefills the page 2 dictation inputs with those same sentences.
+- Leaves inputs that already have text untouched.
+
 ## Filter model (Schedule)
 
 | Dimension | Managed by | Options |
@@ -83,6 +95,7 @@ Class type is inferred from row title:
 - Schedule content script (`src/content.js`)
 - Schedule content styles (`src/content.css`)
 - Snacks content script (`src/exercise.js`)
+- Snacks Launch interceptor (`src/exercise-bridge.js`, `src/snack-extract.js`)
 - Snacks content styles (`src/exercise.css`)
 - Popup UI (`popup.html`, `popup.css`, `popup.js`)
 - Persistence via `chrome.storage.sync` and local snack state in `localStorage`
@@ -100,7 +113,9 @@ Class type is inferred from row title:
     ├── content.css
     ├── content.js
     ├── exercise.css
-    └── exercise.js
+    ├── exercise.js
+    ├── exercise-bridge.js
+    └── snack-extract.js
 ```
 
 ## Troubleshooting
@@ -112,6 +127,14 @@ Class type is inferred from row title:
 - **Drag-and-drop chips do not appear (Snacks).**
   - Ensure you are on a supported `/snacks/*` exercise with a word-ordering pattern.
   - Reload the extension and refresh the page.
+
+- **Situation script panel does not appear.**
+  - Open the Situation snack from the start (page 1) so Launch can be captured.
+  - Reload the extension and hard-refresh (`Ctrl+F5`) the snack.
+
+- **Speech Lab dictation stays empty.**
+  - Visit page 1 first, then go to page 2. Recording is not required.
+  - Reload the extension and hard-refresh if the page was already open.
 
 - **Filters do not update (Schedule).**
   - Toggle extension OFF/ON from popup.

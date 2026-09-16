@@ -5,6 +5,10 @@
   const ASSIGN_ATTR = 'data-wuep-word-id';
   const REORDER_STORAGE_KEY = `wuep_reorder_state:${location.pathname}`;
   const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
+  const SPEECH_PREFILL_ATTR = 'data-wuep-speech-prefilled';
+  const HELPERS_PREFIX = 'wuep_helpers:';
+  const SCRIPT_PANEL_ID = 'wuep-script-panel';
+  const PANEL_COLLAPSED_KEY = 'wuep_script_panel_collapsed';
 
   if (!/\/snacks\//i.test(location.pathname)) {
     window.__wuepExerciseProbe = 'loaded-non-snacks';
@@ -28,13 +32,108 @@
     reorderItems: [],
 
     // rewrite mode
-    rewriteItems: []
+    rewriteItems: [],
+
+    // situation / speech-lab helpers
+    situationScript: [],
+    speechStatements: [],
+    scriptPanelEl: null,
+    speechPrefillItems: []
   };
 
   let observer = null;
   let queued = false;
 
   const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim();
+
+  function getSnackPathId() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    return parts[0] === 'snacks' ? parts[1] || '' : '';
+  }
+
+  function getSnackPageId() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    return parts[0] === 'snacks' ? parts[2] || '' : '';
+  }
+
+  function helpersStorageKey(snackId) {
+    const id = snackId || getSnackPathId();
+    return id ? `${HELPERS_PREFIX}${id}` : '';
+  }
+
+  function isSpeechLabPath() {
+    return /SPEECHLAB/i.test(getSnackPageId());
+  }
+
+  function isSpeechLabRecordPage() {
+    return /SPEECHLAB/i.test(getSnackPageId()) && /_LAB/i.test(getSnackPageId());
+  }
+
+  function isSpeechLabDictationPage() {
+    return isSpeechLabPath() && !/_LAB/i.test(getSnackPageId());
+  }
+
+  function isSituationQuestionPage() {
+    const pageId = getSnackPageId();
+    return /VIDEO/i.test(pageId) && /_SNACK/i.test(pageId);
+  }
+
+  function isSituationScriptPage() {
+    return /VIDEO/i.test(getSnackPageId()) && /SCRIPT/i.test(getSnackPageId());
+  }
+
+  function loadHelpersCache(snackId) {
+    const key = helpersStorageKey(snackId);
+    if (!key) return null;
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(key) || 'null');
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveHelpersCache(helpers, snackId) {
+    const key = helpersStorageKey(snackId || helpers?.snackId);
+    if (!key || !helpers) return;
+    try {
+      const current = loadHelpersCache(snackId || helpers.snackId) || {};
+      const next = {
+        snackId: helpers.snackId || current.snackId || getSnackPathId(),
+        situationScript: helpers.situationScript?.length ? helpers.situationScript : current.situationScript || [],
+        speechStatements: mergeSpeechStatements(helpers.speechStatements, current.speechStatements)
+      };
+      sessionStorage.setItem(key, JSON.stringify(next));
+      applyHelpersCache(next);
+    } catch {
+      // ignore
+    }
+  }
+
+  function isCleanSpeechStatement(value) {
+    const text = normalize(value);
+    if (!text) return false;
+    if (/listen:|repeat:/i.test(text)) return false;
+    return text.length >= 8;
+  }
+
+  function mergeSpeechStatements(incoming, current) {
+    const cleanIncoming = (incoming || []).map(normalize).filter(isCleanSpeechStatement);
+    if (cleanIncoming.length) return cleanIncoming;
+    const cleanCurrent = (current || []).map(normalize).filter(isCleanSpeechStatement);
+    if (cleanCurrent.length) return cleanCurrent;
+    return (incoming || []).map(normalize).filter(Boolean);
+  }
+
+  function applyHelpersCache(helpers) {
+    if (!helpers) return;
+    if (Array.isArray(helpers.situationScript) && helpers.situationScript.length) {
+      state.situationScript = helpers.situationScript;
+    }
+    if (Array.isArray(helpers.speechStatements) && helpers.speechStatements.length) {
+      state.speechStatements = mergeSpeechStatements(helpers.speechStatements, state.speechStatements);
+    }
+  }
 
   function isWordLike(text) {
     // Answer banks often include short phrases ("use to", "was studying"), not only single tokens.
@@ -770,10 +869,231 @@
   }
 
   // ------------------------
+  // Situation script panel
+  // ------------------------
+
+  function scrapeSituationScriptFromDom() {
+    const rows = deepFindAll((el) => el.matches?.('.table.dialog .row, .dialog .row'));
+    if (!rows.length) return [];
+
+    const lines = [];
+    const seen = new Set();
+    rows.forEach((row) => {
+      const speaker = normalize(row.querySelector('.cell.person, .person')?.textContent);
+      const cells = Array.from(row.querySelectorAll('.cell'));
+      const lineCell = cells.find((cell) => !cell.classList.contains('person')) || cells[1] || null;
+      const line = normalize(lineCell?.textContent);
+      const key = `${speaker}::${line}`;
+      if (!line || seen.has(key)) return;
+      seen.add(key);
+      lines.push({ speaker, line });
+    });
+    return lines;
+  }
+
+  function captureSituationScriptIfPresent() {
+    if (!isSituationScriptPage()) return;
+    const lines = scrapeSituationScriptFromDom();
+    if (!lines.length) return;
+    saveHelpersCache({ snackId: getSnackPathId(), situationScript: lines, speechStatements: state.speechStatements });
+  }
+
+  function isPanelCollapsed() {
+    try {
+      return sessionStorage.getItem(PANEL_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function setPanelCollapsed(collapsed) {
+    try {
+      sessionStorage.setItem(PANEL_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }
+
+  function renderScriptPanel() {
+    const panel = state.scriptPanelEl;
+    if (!panel) return;
+
+    const collapsed = isPanelCollapsed();
+    panel.classList.toggle('wuep-script-panel-collapsed', collapsed);
+
+    const toggle = panel.querySelector('.wuep-script-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+    const list = panel.querySelector('.wuep-script-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    state.situationScript.forEach((entry) => {
+      const item = document.createElement('li');
+      item.className = 'wuep-script-line';
+
+      if (entry.speaker) {
+        const speaker = document.createElement('strong');
+        speaker.className = 'wuep-script-speaker';
+        speaker.textContent = entry.speaker;
+        item.appendChild(speaker);
+      }
+
+      const line = document.createElement('span');
+      line.className = 'wuep-script-text';
+      line.textContent = entry.line;
+      item.appendChild(line);
+      list.appendChild(item);
+    });
+  }
+
+  function mountSituationScriptPanel() {
+    if (!isSituationQuestionPage()) return false;
+    if (!state.situationScript.length) {
+      applyHelpersCache(loadHelpersCache());
+    }
+    if (!state.situationScript.length) return false;
+
+    let panel = document.getElementById(SCRIPT_PANEL_ID);
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = SCRIPT_PANEL_ID;
+      panel.className = 'wuep-script-panel';
+      panel.setAttribute('aria-label', 'Dialogue script');
+
+      const header = document.createElement('div');
+      header.className = 'wuep-script-header';
+
+      const title = document.createElement('h2');
+      title.className = 'wuep-script-title';
+      title.textContent = 'Script';
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'wuep-script-toggle';
+      toggle.textContent = 'Hide';
+      toggle.addEventListener('click', () => {
+        const nextCollapsed = !isPanelCollapsed();
+        setPanelCollapsed(nextCollapsed);
+        toggle.textContent = nextCollapsed ? 'Show' : 'Hide';
+        renderScriptPanel();
+      });
+
+      header.appendChild(title);
+      header.appendChild(toggle);
+
+      const list = document.createElement('ul');
+      list.className = 'wuep-script-list';
+
+      panel.appendChild(header);
+      panel.appendChild(list);
+      document.body.appendChild(panel);
+    }
+
+    document.body.classList.add('wuep-has-script-panel');
+    state.scriptPanelEl = panel;
+    const toggle = panel.querySelector('.wuep-script-toggle');
+    if (toggle) toggle.textContent = isPanelCollapsed() ? 'Show' : 'Hide';
+    renderScriptPanel();
+
+    state.mode = state.mode || 'situation-script';
+    window.__wuepExerciseProbe = 'snacks-mounted-situation-script';
+    return true;
+  }
+
+  function teardownSituationScriptPanel() {
+    document.body.classList.remove('wuep-has-script-panel');
+    if (state.scriptPanelEl?.parentNode) state.scriptPanelEl.remove();
+    state.scriptPanelEl = null;
+  }
+
+  // ------------------------
+  // Speech Lab dictation prefill
+  // ------------------------
+
+  function scrapeSpeechStatementsFromDom() {
+    const statements = [];
+    const seen = new Set();
+    const push = (value) => {
+      const text = normalize(String(value || '').split(/Listen:/i)[0]);
+      if (!isCleanSpeechStatement(text) || seen.has(text)) return;
+      seen.add(text);
+      statements.push(text);
+    };
+
+    const blocks = deepFindAll((el) => el.matches?.('app-snack-element'));
+    blocks.forEach((block) => push(block.innerText || block.textContent));
+
+    if (statements.length) return statements;
+
+    const statementNodes = deepFindAll((el) => el.matches?.('.statement, .question-text, .snack-text'));
+    statementNodes.forEach((el) => push(el.textContent));
+    return statements;
+  }
+
+  function captureSpeechStatementsIfPresent() {
+    if (!isSpeechLabRecordPage()) return;
+    if (state.speechStatements.some(isCleanSpeechStatement)) return;
+    const statements = scrapeSpeechStatementsFromDom();
+    if (!statements.length) return;
+    saveHelpersCache({
+      snackId: getSnackPathId(),
+      situationScript: state.situationScript,
+      speechStatements: statements
+    });
+  }
+
+  function mountSpeechLabPrefill() {
+    if (!isSpeechLabDictationPage()) return false;
+    if (!state.speechStatements.length) applyHelpersCache(loadHelpersCache());
+    if (!state.speechStatements.length) return false;
+
+    const inputs = findInputs();
+    if (!inputs.length) return false;
+
+    state.speechPrefillItems = inputs.map((input, idx) => {
+      const phrase = state.speechStatements[idx];
+      if (phrase && !readInputText(input)) {
+        setInputValue(input, phrase);
+        input.setAttribute(SPEECH_PREFILL_ATTR, '1');
+      }
+      return { input, phrase };
+    });
+
+    state.mode = 'speech-lab';
+    window.__wuepExerciseProbe = 'snacks-mounted-speech-lab';
+    return true;
+  }
+
+  function teardownSpeechLabPrefill() {
+    state.speechPrefillItems.forEach((item) => {
+      item.input?.removeAttribute(SPEECH_PREFILL_ATTR);
+    });
+    state.speechPrefillItems = [];
+  }
+
+  function syncHelpersFromCache() {
+    applyHelpersCache(loadHelpersCache());
+  }
+
+  function onHelpersMessage(event) {
+    if (event.source !== window) return;
+    if (event.data?.source !== 'wuep-ecampus-plus') return;
+    if (event.data.type !== 'snack-helpers') return;
+
+    const helpers = event.data.helpers;
+    if (!helpers) return;
+    applyHelpersCache(helpers);
+    queueRefresh();
+  }
+
+  // ------------------------
   // Lifecycle
   // ------------------------
 
   function teardownUI() {
+    teardownSituationScriptPanel();
+    teardownSpeechLabPrefill();
     teardownReorderMode();
     teardownRewriteMode();
     cleanupWordInteractions();
@@ -792,13 +1112,24 @@
     }
 
     teardownUI();
+    syncHelpersFromCache();
+    captureSituationScriptIfPresent();
+    captureSpeechStatementsIfPresent();
+
+    const mountedSpeech = mountSpeechLabPrefill();
+    const mountedScript = mountSituationScriptPanel();
+
+    if (mountedSpeech) {
+      state.bootstrapped = true;
+      return;
+    }
 
     if (mountReorderMode()) {
       state.bootstrapped = true;
       return;
     }
 
-    if (mountRewriteMode()) {
+    if (!isSpeechLabDictationPage() && mountRewriteMode()) {
       state.bootstrapped = true;
       return;
     }
@@ -808,11 +1139,21 @@
       return;
     }
 
+    if (mountedScript) {
+      state.bootstrapped = true;
+      return;
+    }
+
     window.__wuepExerciseProbe = 'snacks-no-known-pattern-yet';
   }
 
   function refreshIfNeeded() {
     if (!state.enabled) return;
+
+    if (isSituationQuestionPage()) {
+      syncHelpersFromCache();
+      if (!document.getElementById(SCRIPT_PANEL_ID)) mountSituationScriptPanel();
+    }
 
     if (!state.bootstrapped) {
       init();
@@ -842,6 +1183,22 @@
         return;
       }
       reconcileWordListMode();
+      return;
+    }
+
+    if (state.mode === 'speech-lab') {
+      if (!state.speechPrefillItems.some((item) => item.input?.isConnected)) {
+        state.bootstrapped = false;
+        init();
+      }
+      return;
+    }
+
+    if (state.mode === 'situation-script') {
+      if (!state.scriptPanelEl?.isConnected) {
+        state.bootstrapped = false;
+        init();
+      }
       return;
     }
 
@@ -878,20 +1235,30 @@
   }
 
   function bootstrap() {
-    chrome.storage.sync.get([ENABLED_KEY], (res) => {
-      if (typeof res?.[ENABLED_KEY] === 'boolean') state.enabled = res[ENABLED_KEY];
-
+    const start = (enabled) => {
+      state.enabled = enabled !== false;
+      window.addEventListener('message', onHelpersMessage);
+      syncHelpersFromCache();
       startObserver();
       if (state.enabled) queueRefresh();
       else teardownUI();
 
-      if (chrome?.storage?.onChanged) {
+      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         chrome.storage.onChanged.addListener((changes, area) => {
           if (area !== 'sync') return;
           if (changes[ENABLED_KEY]) setEnabled(Boolean(changes[ENABLED_KEY].newValue));
         });
       }
-    });
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync?.get) {
+      chrome.storage.sync.get([ENABLED_KEY], (res) => {
+        start(typeof res?.[ENABLED_KEY] === 'boolean' ? res[ENABLED_KEY] : true);
+      });
+      return;
+    }
+
+    start(true);
   }
 
   if (document.readyState === 'loading') {
