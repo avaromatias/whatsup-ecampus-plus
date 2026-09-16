@@ -66,6 +66,7 @@ The extension UI is injected only on:
 - Reads the dialogue from the snack Launch payload (the native SCRIPT page still comes last).
 - Shows that script in a side panel on Situation question pages (true/false and combo gaps).
 - Does not auto-answer. Hide/Show keeps the panel collapsed for the rest of the snack.
+- On gap/combo pages, **Auto-complete all** and the wand beside each input fill the missing words from the script. True/false stays manual.
 
 #### Speech Lab dictation helper
 
@@ -131,6 +132,9 @@ Class type is inferred from row title:
 - **Situation script panel does not appear.**
   - Open the Situation snack from the start (page 1) so Launch can be captured.
   - Reload the extension and hard-refresh (`Ctrl+F5`) the snack.
+
+- **Situation wand stays disabled.**
+  - Only gap text that also appears in the written script can be filled. True/false is never auto-answered.
 
 - **Speech Lab dictation stays empty.**
   - Visit page 1 first, then go to page 2. Recording is not required.
