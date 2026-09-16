@@ -61,6 +61,20 @@ The extension UI is injected only on:
 - Persists per-sentence token order for each snack route.
 - Does not overwrite inputs that already contain a saved/corrected answer.
 
+#### Situation script panel
+
+- Reads the dialogue from the snack Launch payload (the native SCRIPT page still comes last).
+- Starts hidden. A bottom-right FAB opens the script; **Hide** closes it completely.
+- The header can be dragged to move the panel (full or collapsed). **Collapse** keeps only the header.
+- Leaves the page when you exit Situation or reach the native SCRIPT page.
+- On gap/combo pages, **Auto-complete all** and the wand at the end of each sentence fill missing words from the script. True/false stays manual.
+
+#### Speech Lab dictation helper
+
+- Stores the written sentences from Speech Lab page 1.
+- On page 2, leaves dictation inputs empty so you can try first.
+- Adds **Auto-complete all** and a sparkle button beside each input to fill from those sentences.
+
 ## Filter model (Schedule)
 
 | Dimension | Managed by | Options |
@@ -83,6 +97,7 @@ Class type is inferred from row title:
 - Schedule content script (`src/content.js`)
 - Schedule content styles (`src/content.css`)
 - Snacks content script (`src/exercise.js`)
+- Snacks Launch interceptor (`src/exercise-bridge.js`, `src/snack-extract.js`)
 - Snacks content styles (`src/exercise.css`)
 - Popup UI (`popup.html`, `popup.css`, `popup.js`)
 - Persistence via `chrome.storage.sync` and local snack state in `localStorage`
@@ -100,7 +115,9 @@ Class type is inferred from row title:
     ├── content.css
     ├── content.js
     ├── exercise.css
-    └── exercise.js
+    ├── exercise.js
+    ├── exercise-bridge.js
+    └── snack-extract.js
 ```
 
 ## Troubleshooting
@@ -112,6 +129,19 @@ Class type is inferred from row title:
 - **Drag-and-drop chips do not appear (Snacks).**
   - Ensure you are on a supported `/snacks/*` exercise with a word-ordering pattern.
   - Reload the extension and refresh the page.
+
+- **Situation script panel does not appear.**
+  - Open the Situation snack from the start (page 1) so Launch can be captured.
+  - Use the bottom-right script FAB on true/false or gap pages.
+  - Reload the extension and hard-refresh (`Ctrl+F5`) the snack.
+
+- **Situation wand stays disabled.**
+  - Only gap text that also appears in the written script can be filled. True/false is never auto-answered.
+
+- **Speech Lab dictation stays empty.**
+  - Visit page 1 first, then go to page 2. Recording is not required.
+  - Use **Auto-complete all** or the sparkle button beside an input.
+  - Reload the extension and hard-refresh if the page was already open.
 
 - **Filters do not update (Schedule).**
   - Toggle extension OFF/ON from popup.
