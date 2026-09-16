@@ -64,9 +64,10 @@ The extension UI is injected only on:
 #### Situation script panel
 
 - Reads the dialogue from the snack Launch payload (the native SCRIPT page still comes last).
-- Shows that script in a side panel on Situation question pages (true/false and combo gaps).
-- Does not auto-answer. Hide/Show keeps the panel collapsed for the rest of the snack.
-- On gap/combo pages, **Auto-complete all** and the wand beside each input fill the missing words from the script. True/false stays manual.
+- Starts hidden. A bottom-right FAB opens the script; **Hide** closes it completely.
+- The header can be dragged to move the panel (full or collapsed). **Collapse** keeps only the header.
+- Leaves the page when you exit Situation or reach the native SCRIPT page.
+- On gap/combo pages, **Auto-complete all** and the wand at the end of each sentence fill missing words from the script. True/false stays manual.
 
 #### Speech Lab dictation helper
 
@@ -131,6 +132,7 @@ Class type is inferred from row title:
 
 - **Situation script panel does not appear.**
   - Open the Situation snack from the start (page 1) so Launch can be captured.
+  - Use the bottom-right script FAB on true/false or gap pages.
   - Reload the extension and hard-refresh (`Ctrl+F5`) the snack.
 
 - **Situation wand stays disabled.**

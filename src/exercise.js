@@ -7,15 +7,14 @@
   const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
   const HELPERS_PREFIX = 'wuep_helpers:';
   const SCRIPT_PANEL_ID = 'wuep-script-panel';
+  const SCRIPT_FAB_ID = 'wuep-script-fab';
+  const PANEL_HIDDEN_KEY = 'wuep_script_panel_hidden';
   const PANEL_COLLAPSED_KEY = 'wuep_script_panel_collapsed';
+  const PANEL_POS_KEY = 'wuep_script_panel_pos';
   const COMPLETE_ALL_ID = 'wuep-complete-all';
   const COMPLETE_ROW_CLASS = 'wuep-complete-row';
 
-  if (!/\/snacks\//i.test(location.pathname)) {
-    window.__wuepExerciseProbe = 'loaded-non-snacks';
-    return;
-  }
-  window.__wuepExerciseProbe = 'loaded-snacks';
+  window.__wuepExerciseProbe = /\/snacks\//i.test(location.pathname) ? 'loaded-snacks' : 'loaded-non-snacks';
 
   const state = {
     enabled: true,
@@ -39,6 +38,7 @@
     situationScript: [],
     speechStatements: [],
     scriptPanelEl: null,
+    scriptFabEl: null,
     speechPrefillItems: [],
     situationGapItems: []
   };
@@ -47,6 +47,10 @@
   let queued = false;
 
   const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim();
+
+  function isSnacksPath() {
+    return /\/snacks\//i.test(location.pathname);
+  }
 
   function getSnackPathId() {
     const parts = location.pathname.split('/').filter(Boolean);
@@ -261,7 +265,9 @@
 
   function mountControlCompleteButton(control, onComplete, enabled = true) {
     if (!control || control.dataset.wuepCompleteBound === '1') return;
-    const host = control.closest('snack-gap') || control;
+    const host = isSituationQuestionPage()
+      ? control.closest('.fill-gap') || control.closest('.fill-container') || control.closest('snack-gap') || control
+      : control.closest('snack-gap') || control;
     if (host.parentElement?.classList.contains(COMPLETE_ROW_CLASS)) {
       control.dataset.wuepCompleteBound = '1';
       return;
@@ -1006,6 +1012,23 @@
     saveHelpersCache({ snackId: getSnackPathId(), situationScript: lines, speechStatements: state.speechStatements });
   }
 
+  function isPanelHidden() {
+    try {
+      const stored = sessionStorage.getItem(PANEL_HIDDEN_KEY);
+      return stored !== '0';
+    } catch {
+      return true;
+    }
+  }
+
+  function setPanelHidden(hidden) {
+    try {
+      sessionStorage.setItem(PANEL_HIDDEN_KEY, hidden ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }
+
   function isPanelCollapsed() {
     try {
       return sessionStorage.getItem(PANEL_COLLAPSED_KEY) === '1';
@@ -1022,6 +1045,102 @@
     }
   }
 
+  function loadPanelPosition() {
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(PANEL_POS_KEY) || 'null');
+      if (!parsed || typeof parsed !== 'object') return null;
+      const left = Number(parsed.left);
+      const top = Number(parsed.top);
+      if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+      return { left, top };
+    } catch {
+      return null;
+    }
+  }
+
+  function savePanelPosition(panel) {
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    try {
+      sessionStorage.setItem(PANEL_POS_KEY, JSON.stringify({ left: rect.left, top: rect.top }));
+    } catch {
+      // ignore
+    }
+  }
+
+  function clampPanelPosition(panel, left, top) {
+    const width = panel.offsetWidth || 320;
+    const height = Math.min(panel.offsetHeight || 48, window.innerHeight - 16);
+    const maxLeft = Math.max(8, window.innerWidth - width - 8);
+    const maxTop = Math.max(8, window.innerHeight - height - 8);
+    return {
+      left: Math.min(Math.max(8, left), maxLeft),
+      top: Math.min(Math.max(8, top), maxTop)
+    };
+  }
+
+  function applyPanelPosition(panel) {
+    if (!panel) return;
+    const saved = loadPanelPosition();
+    if (!saved) {
+      panel.style.top = '88px';
+      panel.style.right = '16px';
+      panel.style.left = 'auto';
+      return;
+    }
+    const next = clampPanelPosition(panel, saved.left, saved.top);
+    panel.style.right = 'auto';
+    panel.style.left = `${next.left}px`;
+    panel.style.top = `${next.top}px`;
+  }
+
+  function installPanelDrag(panel) {
+    const header = panel.querySelector('.wuep-script-header');
+    if (!header || header.dataset.wuepDragBound === '1') return;
+    header.dataset.wuepDragBound = '1';
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let origLeft = 0;
+    let origTop = 0;
+
+    header.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest('button')) return;
+      const rect = panel.getBoundingClientRect();
+      dragging = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      origLeft = rect.left;
+      origTop = rect.top;
+      panel.style.right = 'auto';
+      panel.style.left = `${origLeft}px`;
+      panel.style.top = `${origTop}px`;
+      header.classList.add('wuep-script-dragging');
+      header.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    header.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      const next = clampPanelPosition(panel, origLeft + event.clientX - startX, origTop + event.clientY - startY);
+      panel.style.left = `${next.left}px`;
+      panel.style.top = `${next.top}px`;
+    });
+
+    const stopDrag = (event) => {
+      if (!dragging) return;
+      dragging = false;
+      header.classList.remove('wuep-script-dragging');
+      if (header.hasPointerCapture?.(event.pointerId)) header.releasePointerCapture(event.pointerId);
+      savePanelPosition(panel);
+    };
+
+    header.addEventListener('pointerup', stopDrag);
+    header.addEventListener('pointercancel', stopDrag);
+  }
+
   function renderScriptPanel() {
     const panel = state.scriptPanelEl;
     if (!panel) return;
@@ -1029,8 +1148,11 @@
     const collapsed = isPanelCollapsed();
     panel.classList.toggle('wuep-script-panel-collapsed', collapsed);
 
-    const toggle = panel.querySelector('.wuep-script-toggle');
-    if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    const collapseBtn = panel.querySelector('.wuep-script-collapse');
+    if (collapseBtn) {
+      collapseBtn.textContent = collapsed ? 'Expand' : 'Collapse';
+      collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
 
     const list = panel.querySelector('.wuep-script-list');
     if (!list) return;
@@ -1053,6 +1175,136 @@
       item.appendChild(line);
       list.appendChild(item);
     });
+  }
+
+  function createScriptFabIcon() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('wuep-script-fab-icon');
+
+    const page = document.createElementNS(ns, 'path');
+    page.setAttribute('d', 'M7 3.8h7.2L19 8.6V20.2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.8a1 1 0 0 1 1-1z');
+    page.setAttribute('fill', 'none');
+    page.setAttribute('stroke', 'currentColor');
+    page.setAttribute('stroke-width', '1.7');
+    page.setAttribute('stroke-linejoin', 'round');
+
+    const fold = document.createElementNS(ns, 'path');
+    fold.setAttribute('d', 'M14.2 3.8V8.6H19');
+    fold.setAttribute('fill', 'none');
+    fold.setAttribute('stroke', 'currentColor');
+    fold.setAttribute('stroke-width', '1.7');
+    fold.setAttribute('stroke-linejoin', 'round');
+
+    const line1 = document.createElementNS(ns, 'path');
+    line1.setAttribute('d', 'M8.6 12.2h6.8M8.6 15.4h4.8');
+    line1.setAttribute('fill', 'none');
+    line1.setAttribute('stroke', 'currentColor');
+    line1.setAttribute('stroke-width', '1.7');
+    line1.setAttribute('stroke-linecap', 'round');
+
+    svg.append(page, fold, line1);
+    return svg;
+  }
+
+  function hideScriptPanel() {
+    setPanelHidden(true);
+    if (state.scriptPanelEl?.parentNode) state.scriptPanelEl.remove();
+    state.scriptPanelEl = null;
+    document.body.classList.remove('wuep-has-script-panel');
+    ensureScriptFab();
+  }
+
+  function showScriptPanel() {
+    setPanelHidden(false);
+    setPanelCollapsed(false);
+    removeScriptFab();
+    ensureScriptPanel();
+  }
+
+  function ensureScriptFab() {
+    if (document.getElementById(SCRIPT_FAB_ID)) {
+      state.scriptFabEl = document.getElementById(SCRIPT_FAB_ID);
+      return;
+    }
+
+    const fab = document.createElement('button');
+    fab.id = SCRIPT_FAB_ID;
+    fab.type = 'button';
+    fab.className = 'wuep-script-fab';
+    fab.title = 'Show dialogue script';
+    fab.setAttribute('aria-label', 'Show dialogue script');
+    fab.appendChild(createScriptFabIcon());
+    fab.addEventListener('click', (event) => {
+      event.preventDefault();
+      showScriptPanel();
+    });
+    document.body.appendChild(fab);
+    state.scriptFabEl = fab;
+  }
+
+  function removeScriptFab() {
+    const fab = state.scriptFabEl || document.getElementById(SCRIPT_FAB_ID);
+    if (fab?.parentNode) fab.remove();
+    state.scriptFabEl = null;
+  }
+
+  function ensureScriptPanel() {
+    let panel = document.getElementById(SCRIPT_PANEL_ID);
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = SCRIPT_PANEL_ID;
+      panel.className = 'wuep-script-panel';
+      panel.setAttribute('aria-label', 'Dialogue script');
+
+      const header = document.createElement('div');
+      header.className = 'wuep-script-header';
+
+      const title = document.createElement('h2');
+      title.className = 'wuep-script-title';
+      title.textContent = 'Script';
+
+      const actions = document.createElement('div');
+      actions.className = 'wuep-script-actions';
+
+      const collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.className = 'wuep-script-collapse';
+      collapseBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setPanelCollapsed(!isPanelCollapsed());
+        renderScriptPanel();
+      });
+
+      const hideBtn = document.createElement('button');
+      hideBtn.type = 'button';
+      hideBtn.className = 'wuep-script-toggle';
+      hideBtn.textContent = 'Hide';
+      hideBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        hideScriptPanel();
+      });
+
+      actions.append(collapseBtn, hideBtn);
+      header.append(title, actions);
+
+      const list = document.createElement('ul');
+      list.className = 'wuep-script-list';
+
+      panel.append(header, list);
+      document.body.appendChild(panel);
+      installPanelDrag(panel);
+      state.scriptPanelEl = panel;
+      applyPanelPosition(panel);
+      renderScriptPanel();
+      return;
+    }
+
+    state.scriptPanelEl = panel;
   }
 
   function tokenizeWords(value) {
@@ -1265,56 +1517,28 @@
   }
 
   function mountSituationScriptPanel() {
-    if (!isSituationQuestionPage()) return false;
+    if (!isSituationQuestionPage()) {
+      teardownSituationScriptPanel();
+      return false;
+    }
+    if (!state.situationScript.length) applyHelpersCache(loadHelpersCache());
     if (!state.situationScript.length) {
-      applyHelpersCache(loadHelpersCache());
-    }
-    if (!state.situationScript.length) return false;
-
-    let panel = document.getElementById(SCRIPT_PANEL_ID);
-    if (!panel) {
-      panel = document.createElement('aside');
-      panel.id = SCRIPT_PANEL_ID;
-      panel.className = 'wuep-script-panel';
-      panel.setAttribute('aria-label', 'Dialogue script');
-
-      const header = document.createElement('div');
-      header.className = 'wuep-script-header';
-
-      const title = document.createElement('h2');
-      title.className = 'wuep-script-title';
-      title.textContent = 'Script';
-
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'wuep-script-toggle';
-      toggle.textContent = 'Hide';
-      toggle.addEventListener('click', () => {
-        const nextCollapsed = !isPanelCollapsed();
-        setPanelCollapsed(nextCollapsed);
-        toggle.textContent = nextCollapsed ? 'Show' : 'Hide';
-        renderScriptPanel();
-      });
-
-      header.appendChild(title);
-      header.appendChild(toggle);
-
-      const list = document.createElement('ul');
-      list.className = 'wuep-script-list';
-
-      panel.appendChild(header);
-      panel.appendChild(list);
-      document.body.appendChild(panel);
+      teardownSituationScriptPanel();
+      return false;
     }
 
-    document.body.classList.add('wuep-has-script-panel');
-    state.scriptPanelEl = panel;
-    const toggle = panel.querySelector('.wuep-script-toggle');
-    if (toggle) toggle.textContent = isPanelCollapsed() ? 'Show' : 'Hide';
-    renderScriptPanel();
+    if (isPanelHidden()) {
+      if (state.scriptPanelEl?.parentNode) state.scriptPanelEl.remove();
+      state.scriptPanelEl = null;
+      document.body.classList.remove('wuep-has-script-panel');
+      ensureScriptFab();
+    } else {
+      removeScriptFab();
+      ensureScriptPanel();
+    }
+
     mountSituationAutocomplete();
-
-    state.mode = state.mode || 'situation-script';
+    state.mode = 'situation-script';
     window.__wuepExerciseProbe = 'snacks-mounted-situation-script';
     return true;
   }
@@ -1323,6 +1547,9 @@
     document.body.classList.remove('wuep-has-script-panel');
     if (state.scriptPanelEl?.parentNode) state.scriptPanelEl.remove();
     state.scriptPanelEl = null;
+    removeScriptFab();
+    document.getElementById(SCRIPT_PANEL_ID)?.remove();
+    document.getElementById(SCRIPT_FAB_ID)?.remove();
   }
 
   // ------------------------
@@ -1429,7 +1656,7 @@
   }
 
   function init() {
-    if (!state.enabled) {
+    if (!state.enabled || !isSnacksPath()) {
       teardownUI();
       return;
     }
@@ -1473,9 +1700,24 @@
   function refreshIfNeeded() {
     if (!state.enabled) return;
 
+    if (!isSnacksPath()) {
+      if (state.bootstrapped || state.scriptPanelEl || state.scriptFabEl || document.getElementById(SCRIPT_PANEL_ID) || document.getElementById(SCRIPT_FAB_ID)) {
+        teardownUI();
+      }
+      return;
+    }
+
+    if (!isSituationQuestionPage()) {
+      teardownSituationScriptPanel();
+      if (state.mode === 'situation-script') {
+        state.mode = null;
+        state.bootstrapped = false;
+      }
+    }
+
     if (isSituationQuestionPage()) {
       syncHelpersFromCache();
-      if (!document.getElementById(SCRIPT_PANEL_ID)) mountSituationScriptPanel();
+      mountSituationScriptPanel();
     }
 
     if (!state.bootstrapped) {
@@ -1518,7 +1760,12 @@
     }
 
     if (state.mode === 'situation-script') {
-      if (!state.scriptPanelEl?.isConnected) {
+      if (!isSituationQuestionPage()) {
+        state.bootstrapped = false;
+        init();
+        return;
+      }
+      if (!state.scriptPanelEl?.isConnected && !state.scriptFabEl?.isConnected) {
         state.bootstrapped = false;
         init();
         return;
@@ -1565,6 +1812,18 @@
     const start = (enabled) => {
       state.enabled = enabled !== false;
       window.addEventListener('message', onHelpersMessage);
+      window.addEventListener('popstate', queueRefresh);
+      ['pushState', 'replaceState'].forEach((method) => {
+        const original = history[method];
+        if (typeof original !== 'function' || original.__wuepPatched) return;
+        const patched = function patchedHistory(...args) {
+          const result = original.apply(this, args);
+          queueRefresh();
+          return result;
+        };
+        patched.__wuepPatched = true;
+        history[method] = patched;
+      });
       syncHelpersFromCache();
       startObserver();
       if (state.enabled) queueRefresh();
