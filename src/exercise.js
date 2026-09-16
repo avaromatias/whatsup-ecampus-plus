@@ -5,10 +5,11 @@
   const ASSIGN_ATTR = 'data-wuep-word-id';
   const REORDER_STORAGE_KEY = `wuep_reorder_state:${location.pathname}`;
   const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
-  const SPEECH_PREFILL_ATTR = 'data-wuep-speech-prefilled';
   const HELPERS_PREFIX = 'wuep_helpers:';
   const SCRIPT_PANEL_ID = 'wuep-script-panel';
   const PANEL_COLLAPSED_KEY = 'wuep_script_panel_collapsed';
+  const COMPLETE_ALL_ID = 'wuep-complete-all';
+  const COMPLETE_ROW_CLASS = 'wuep-complete-row';
 
   if (!/\/snacks\//i.test(location.pathname)) {
     window.__wuepExerciseProbe = 'loaded-non-snacks';
@@ -215,6 +216,111 @@
     if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) return normalize(input.value);
     if (input instanceof HTMLElement && input.getAttribute('contenteditable') === 'true') return normalize(input.textContent);
     return '';
+  }
+
+  function createSparkleIcon() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('wuep-complete-icon');
+
+    const wand = document.createElementNS(ns, 'path');
+    wand.setAttribute('d', 'M2.6 13.6 9.2 7');
+    wand.setAttribute('fill', 'none');
+    wand.setAttribute('stroke', 'currentColor');
+    wand.setAttribute('stroke-width', '1.7');
+    wand.setAttribute('stroke-linecap', 'round');
+
+    const star = document.createElementNS(ns, 'path');
+    star.setAttribute('d', 'M11.2 1.2 12 4.1 14.9 4.9 12 5.7 11.2 8.6 10.4 5.7 7.5 4.9 10.4 4.1Z');
+
+    const spark = document.createElementNS(ns, 'path');
+    spark.setAttribute('d', 'M14.15 8.35 14.55 9.55 15.75 9.95 14.55 10.35 14.15 11.55 13.75 10.35 12.55 9.95 13.75 9.55Z');
+
+    svg.append(wand, star, spark);
+    return svg;
+  }
+
+  function createCompleteOneButton(onComplete) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wuep-complete-one';
+    button.title = 'Auto-complete this answer';
+    button.setAttribute('aria-label', 'Auto-complete this answer');
+    button.appendChild(createSparkleIcon());
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onComplete();
+    });
+    return button;
+  }
+
+  function mountControlCompleteButton(control, onComplete) {
+    if (!control || control.dataset.wuepCompleteBound === '1') return;
+    const host = control.closest('snack-gap') || control;
+    if (host.parentElement?.classList.contains(COMPLETE_ROW_CLASS)) {
+      control.dataset.wuepCompleteBound = '1';
+      return;
+    }
+
+    const parent = host.parentNode;
+    if (!parent) return;
+
+    const row = document.createElement('span');
+    row.className = COMPLETE_ROW_CLASS;
+    parent.insertBefore(row, host);
+    row.appendChild(host);
+    row.appendChild(createCompleteOneButton(onComplete));
+    control.dataset.wuepCompleteBound = '1';
+  }
+
+  function findCompleteAllAnchor() {
+    return document.querySelector('main form, form, main .snack, main');
+  }
+
+  function ensureCompleteAllButton(onClick) {
+    if (document.getElementById(COMPLETE_ALL_ID)) return;
+
+    const anchor = findCompleteAllAnchor();
+    if (!anchor?.parentNode) return;
+
+    const bar = document.createElement('div');
+    bar.className = 'wuep-complete-bar';
+
+    const button = document.createElement('button');
+    button.id = COMPLETE_ALL_ID;
+    button.type = 'button';
+    button.className = 'wuep-complete-all';
+    button.textContent = 'Auto-complete all';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      onClick();
+    });
+
+    bar.appendChild(button);
+    anchor.parentNode.insertBefore(bar, anchor);
+  }
+
+  function teardownCompleteUi() {
+    document.querySelector('.wuep-complete-bar')?.remove();
+    document.querySelectorAll(`.${COMPLETE_ROW_CLASS}`).forEach((row) => {
+      const parent = row.parentNode;
+      if (!parent) {
+        row.remove();
+        return;
+      }
+      while (row.firstChild) {
+        const child = row.firstChild;
+        if (child.classList?.contains('wuep-complete-one')) child.remove();
+        else parent.insertBefore(child, row);
+      }
+      row.remove();
+    });
+    findInputs().forEach((input) => {
+      delete input.dataset.wuepCompleteBound;
+    });
   }
 
   // ------------------------
@@ -1008,7 +1114,7 @@
   }
 
   // ------------------------
-  // Speech Lab dictation prefill
+  // Speech Lab dictation helper
   // ------------------------
 
   function scrapeSpeechStatementsFromDom() {
@@ -1043,6 +1149,11 @@
     });
   }
 
+  function applySpeechPhrase(item) {
+    if (!item?.input || !item.phrase) return;
+    setInputValue(item.input, item.phrase);
+  }
+
   function mountSpeechLabPrefill() {
     if (!isSpeechLabDictationPage()) return false;
     if (!state.speechStatements.length) applyHelpersCache(loadHelpersCache());
@@ -1052,12 +1163,13 @@
     if (!inputs.length) return false;
 
     state.speechPrefillItems = inputs.map((input, idx) => {
-      const phrase = state.speechStatements[idx];
-      if (phrase && !readInputText(input)) {
-        setInputValue(input, phrase);
-        input.setAttribute(SPEECH_PREFILL_ATTR, '1');
-      }
+      const phrase = state.speechStatements[idx] || '';
+      if (phrase) mountControlCompleteButton(input, () => setInputValue(input, phrase));
       return { input, phrase };
+    });
+
+    ensureCompleteAllButton(() => {
+      state.speechPrefillItems.forEach(applySpeechPhrase);
     });
 
     state.mode = 'speech-lab';
@@ -1066,9 +1178,7 @@
   }
 
   function teardownSpeechLabPrefill() {
-    state.speechPrefillItems.forEach((item) => {
-      item.input?.removeAttribute(SPEECH_PREFILL_ATTR);
-    });
+    teardownCompleteUi();
     state.speechPrefillItems = [];
   }
 

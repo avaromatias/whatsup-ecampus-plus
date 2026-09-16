@@ -67,11 +67,11 @@ The extension UI is injected only on:
 - Shows that script in a side panel on Situation question pages (true/false and combo gaps).
 - Does not auto-answer. Hide/Show keeps the panel collapsed for the rest of the snack.
 
-#### Speech Lab dictation prefill
+#### Speech Lab dictation helper
 
 - Stores the written sentences from Speech Lab page 1.
-- Prefills the page 2 dictation inputs with those same sentences.
-- Leaves inputs that already have text untouched.
+- On page 2, leaves dictation inputs empty so you can try first.
+- Adds **Auto-complete all** and a sparkle button beside each input to fill from those sentences.
 
 ## Filter model (Schedule)
 
@@ -134,6 +134,7 @@ Class type is inferred from row title:
 
 - **Speech Lab dictation stays empty.**
   - Visit page 1 first, then go to page 2. Recording is not required.
+  - Use **Auto-complete all** or the sparkle button beside an input.
   - Reload the extension and hard-refresh if the page was already open.
 
 - **Filters do not update (Schedule).**
