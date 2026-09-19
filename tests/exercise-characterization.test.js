@@ -4,7 +4,8 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'exercise.js'), 'utf8');
+const root = path.join(__dirname, '..');
+const source = fs.readFileSync(path.join(root, 'dist', 'exercise.js'), 'utf8');
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 function loadExercise(pathname = '/snacks/COURSE/PAGE', { boot = false, enabled = true, containers = [] } = {}) {
@@ -60,16 +61,17 @@ function loadExercise(pathname = '/snacks/COURSE/PAGE', { boot = false, enabled 
       setItem: (key, value) => values.set(`local:${key}`, value)
     }
   };
-  // The script intentionally has no public API. Expose its existing closure only
-  // in this VM; no production bytes or runtime globals are changed.
-  const instrumented = source.replace(/\}\)\(\);\s*$/, `
+  // Expose the private closure only in this VM. The production bundle remains
+  // untouched; the test hooks into its inner content-script closure.
+  const instrumented = source.replace(/\n  \}\)\(\);\s*\n\}\)\(\);\s*$/, `
     window.__characterizeExercise = {
       state, parseTokens, parseInputTokens, extractDisplayPunctuation,
       remapWithBaseCasing, toSentence, loadReorderPersisted, saveReorderPersisted,
       answerFromScript, saveHelpersCache, loadHelpersCache, onHelpersMessage
     };
-  })();`);
-  assert.notEqual(instrumented, source, 'exercise closure must remain recognizable');
+  })();
+})();`);
+  assert.notEqual(instrumented, source, 'bundled exercise closure must remain recognizable');
   vm.runInNewContext(instrumented, context);
   return {
     window, location, history, listeners, values,

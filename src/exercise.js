@@ -1,3 +1,12 @@
+import {
+  normalize,
+  extractDisplayPunctuation,
+  parseTokens,
+  parseInputTokens,
+  toSentence,
+  remapWithBaseCasing
+} from './exercise/text.js';
+
 (() => {
   window.__wuepExerciseProbe = 'script-loaded';
 
@@ -45,8 +54,6 @@
 
   let observer = null;
   let queued = false;
-
-  const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
   function isSnacksPath() {
     return /\/snacks\//i.test(location.pathname);
@@ -340,68 +347,6 @@
       const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
       const input = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
       return Boolean(textEl && input);
-    });
-  }
-
-  function cleanToken(token) {
-    const leftTrimmed = normalize(token).replace(/^[¿?¡!.,;:…]+/, '');
-    return normalize(leftTrimmed);
-  }
-
-  function extractDisplayPunctuation(raw) {
-    const text = raw || '';
-    // Platform format is usually: "?\nword | word" or ".\nword | word"
-    const leading = text.match(/^\s*([¿?¡!.,;:…]+)/);
-    if (leading) return leading[1];
-
-    const trailing = text.match(/([¿?¡!.,;:…]+)\s*$/);
-    if (trailing) return trailing[1];
-
-    return '';
-  }
-
-  function parseTokens(raw) {
-    const cleaned = normalize(raw).replace(/^[¿?¡!.,;:…]+\s*/, '');
-    return cleaned
-      .split('|')
-      .map((s) => cleanToken(s.replace(/^[¿?¡!.,;:…]+\s*/, '')))
-      .filter(Boolean);
-  }
-
-  function parseInputTokens(raw) {
-    const cleaned = normalize(raw)
-      .replace(/^\?\s*/, '')
-      .replace(/\?$/g, '')
-      .replace(/\.$/g, '');
-
-    return cleaned
-      .split(/\s+/)
-      .map((s) => cleanToken(s))
-      .filter(Boolean);
-  }
-
-  function toSentence(tokens) {
-    const next = [...tokens];
-    if (next.length) {
-      next[0] = next[0].charAt(0).toUpperCase() + next[0].slice(1);
-    }
-    return next.join(' ');
-  }
-
-  function remapWithBaseCasing(candidateTokens, baseTokens) {
-    const pools = new Map();
-
-    baseTokens.forEach((token) => {
-      const key = token.toLowerCase();
-      if (!pools.has(key)) pools.set(key, []);
-      pools.get(key).push(token);
-    });
-
-    return candidateTokens.map((token) => {
-      const key = token.toLowerCase();
-      const pool = pools.get(key);
-      if (pool && pool.length) return pool.shift();
-      return token;
     });
   }
 

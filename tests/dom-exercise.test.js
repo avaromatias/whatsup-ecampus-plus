@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { JSDOM } = require('jsdom');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'exercise.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'dist', 'exercise.js'), 'utf8');
 
 function loadExercise(markup, page = 'PAGE') {
   const dom = new JSDOM(markup, {

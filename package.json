@@ -1,8 +1,11 @@
 {
   "scripts": {
+    "build": "esbuild src/exercise.js --bundle --format=iife --platform=browser --target=chrome114 --outfile=dist/exercise.js",
+    "pretest": "npm run build",
     "test": "node --test --test-isolation=none"
   },
   "devDependencies": {
+    "esbuild": "^0.25.12",
     "jsdom": "^30.0.0"
   }
 }

@@ -35,7 +35,7 @@
         "https://ecampus.whatsup.es/*"
       ],
       "js": [
-        "src/exercise.js"
+        "dist/exercise.js"
       ],
       "css": [
         "src/exercise.css"
