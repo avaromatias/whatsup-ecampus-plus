@@ -65,7 +65,7 @@ function loadExercise(pathname = '/snacks/COURSE/PAGE', { boot = false, enabled 
   // untouched; the test hooks into its inner content-script closure.
   const instrumented = source.replace(/\n  \}\)\(\);\s*\n\}\)\(\);\s*$/, `
     window.__characterizeExercise = {
-      state, parseTokens, parseInputTokens, extractDisplayPunctuation,
+      state, parseTokens, parseInputTokens, extractDisplayPunctuation, tokenizeWords,
       remapWithBaseCasing, toSentence, loadReorderPersisted, saveReorderPersisted,
       answerFromScript, saveHelpersCache, loadHelpersCache, onHelpersMessage
     };
@@ -122,9 +122,19 @@ test('reorder persistence is keyed by the initial path and tolerates corrupt sto
 test('Situation matching chooses a full option, then extracts a cased gap from script', () => {
   const { exercise } = loadExercise();
   exercise.state.situationScript = [{ line: 'She Was Studying English yesterday.' }];
-  assert.equal(exercise.answerFromScript('She', 'English yesterday', ['is', 'Was Studying']), 'Was Studying');
-  assert.equal(exercise.answerFromScript('She', 'English yesterday', []), 'Was Studying');
-  assert.equal(exercise.answerFromScript('unrelated', 'context', []), '');
+  const script = exercise.state.situationScript;
+  assert.equal(exercise.answerFromScript(script, 'She', 'English yesterday', ['is', 'Was Studying']), 'Was Studying');
+  assert.equal(exercise.answerFromScript(script, 'She', 'English yesterday', []), 'Was Studying');
+  assert.equal(exercise.answerFromScript(script, 'unrelated', 'context', []), '');
+});
+
+test('Situation matching preserves apostrophes, punctuation fallback, and empty scripts', () => {
+  const { exercise } = loadExercise();
+  const script = [{ line: 'Don’t Stop, BELIEVING now!' }];
+  assert.deepEqual(plain(exercise.tokenizeWords(script[0].line)), ["don't", 'stop', 'believing', 'now']);
+  assert.equal(exercise.answerFromScript(script, 'Don’t', 'now', []), 'stop believing');
+  assert.equal(exercise.answerFromScript(script, 'missing', 'now', []), 'BELIEVING');
+  assert.equal(exercise.answerFromScript([], 'Don’t', 'now', []), '');
 });
 
 test('helpers cache keeps prior script and clean Speech Lab statements when a later payload is empty', () => {
