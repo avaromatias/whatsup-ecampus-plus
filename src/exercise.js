@@ -1,13 +1,13 @@
 import { normalize } from './exercise/text.js';
 import { createReorderMode } from './exercise/reorder-mode.js';
 import { createRewriteMode } from './exercise/rewrite-mode.js';
+import { createWordListMode } from './exercise/word-list-mode.js';
 import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
 
 (() => {
   window.__wuepExerciseProbe = 'script-loaded';
 
   const ENABLED_KEY = 'wuep_enabled';
-  const ASSIGN_ATTR = 'data-wuep-word-id';
   const HELPERS_PREFIX = 'wuep_helpers:';
   const SCRIPT_PANEL_ID = 'wuep-script-panel';
   const SCRIPT_FAB_ID = 'wuep-script-fab';
@@ -24,13 +24,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     mode: null, // 'reorder' | 'rewrite' | 'word-list'
     bootstrapped: false,
 
-    // word-list mode
-    activeInput: null,
-    wordItems: [],
-    assignmentByInput: new WeakMap(),
-    usageByWordId: new Map(),
-    boundInputs: new WeakMap(),
-
     // situation / speech-lab helpers
     situationScript: [],
     speechStatements: [],
@@ -41,7 +34,8 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
   };
 
   const reorderMode = createReorderMode({ document, getStorage: () => localStorage, pathname: location.pathname, readInputText, setInputValue });
-  const rewriteMode = createRewriteMode({ document, hasWordList: () => findWordList().length > 0, readInputText, setInputValue });
+  const wordListMode = createWordListMode({ document, deepFindAll, findInputs, readInputText, setInputValue, setCaretToEnd, isEnabled: () => state.enabled });
+  const rewriteMode = createRewriteMode({ document, hasWordList: () => wordListMode.findWords().length > 0, readInputText, setInputValue });
 
   let observer = null;
   let queued = false;
@@ -137,11 +131,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     if (Array.isArray(helpers.speechStatements) && helpers.speechStatements.length) {
       state.speechStatements = mergeSpeechStatements(helpers.speechStatements, state.speechStatements);
     }
-  }
-
-  function isWordLike(text) {
-    // Answer banks often include short phrases ("use to", "was studying"), not only single tokens.
-    return /^[a-zA-Z][a-zA-Z'’-]{0,30}(?:\s+[a-zA-Z][a-zA-Z'’-]{0,30}){0,4}$/.test(text);
   }
 
   function deepFindAll(predicate) {
@@ -327,304 +316,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     findInputs().forEach((input) => {
       delete input.dataset.wuepCompleteBound;
     });
-  }
-
-  // ------------------------
-  // Word-list mode (existing)
-  // ------------------------
-
-  function findWordList() {
-    const lists = deepFindAll((el) => el.tagName === 'UL' || el.tagName === 'OL');
-    const preferred = [];
-    const rest = [];
-
-    lists.forEach((list) => {
-      if (/\banswer\b/i.test(list.className || '')) preferred.push(list);
-      else rest.push(list);
-    });
-
-    for (const list of [...preferred, ...rest]) {
-      const items = Array.from(list.children).filter((c) => c.tagName === 'LI');
-      if (items.length < 2) continue;
-      const words = items.map((li) => normalize(li.textContent));
-      if (words.every((w) => w && isWordLike(w))) return items;
-    }
-
-    return [];
-  }
-
-  function getClearBtn(input) {
-    return input.closest('.wuep-input-wrap')?.querySelector('.wuep-clear-btn') || null;
-  }
-
-  function updateClearButton(input) {
-    const btn = getClearBtn(input);
-    if (!btn) return;
-    btn.hidden = !readInputText(input);
-  }
-
-  function getAssignedWordId(input) {
-    return input.getAttribute(ASSIGN_ATTR) || null;
-  }
-
-  function setAssignedWordId(input, wordId) {
-    if (wordId) input.setAttribute(ASSIGN_ATTR, wordId);
-    else input.removeAttribute(ASSIGN_ATTR);
-  }
-
-  function recomputeAssignmentsAndUsage() {
-    state.assignmentByInput = new WeakMap();
-    state.usageByWordId.clear();
-
-    const validIds = new Set(state.wordItems.map((w) => w.id));
-
-    findInputs().forEach((input) => {
-      const value = readInputText(input);
-      const wordId = getAssignedWordId(input);
-
-      if (!value || !wordId || !validIds.has(wordId)) {
-        setAssignedWordId(input, null);
-        return;
-      }
-
-      state.assignmentByInput.set(input, { wordId });
-      state.usageByWordId.set(wordId, (state.usageByWordId.get(wordId) || 0) + 1);
-    });
-  }
-
-  function clearAssignment(input) {
-    state.assignmentByInput.delete(input);
-    setAssignedWordId(input, null);
-  }
-
-  function clearInput(input) {
-    if (!input) return;
-    clearAssignment(input);
-    setInputValue(input, '');
-    updateClearButton(input);
-    recomputeAssignmentsAndUsage();
-    updateWordVisualState();
-  }
-
-  function renderWordBadge(item, count) {
-    const visible = count > 1;
-    item.el.classList.toggle('wuep-word-has-badge', visible);
-    if (visible) {
-      item.el.setAttribute('data-wuep-usage', String(count));
-    } else {
-      item.el.removeAttribute('data-wuep-usage');
-    }
-  }
-
-  function getEmptyInputsCount() {
-    return findInputs().filter((input) => !readInputText(input)).length;
-  }
-
-  function shouldMarkWordsAsUsed() {
-    const remainingInputs = getEmptyInputsCount();
-    const availableWords = state.wordItems.filter((item) => (state.usageByWordId.get(item.id) || 0) === 0).length;
-    return availableWords >= remainingInputs;
-  }
-
-  function updateWordVisualState() {
-    const markAsUsed = shouldMarkWordsAsUsed();
-
-    state.wordItems.forEach((item) => {
-      const count = state.usageByWordId.get(item.id) || 0;
-      const used = markAsUsed && count > 0;
-      item.used = count > 0;
-
-      item.el.classList.toggle('wuep-word-used', used);
-      item.el.style.opacity = used ? '0.45' : '';
-      item.el.style.textDecoration = used ? 'line-through' : '';
-      item.el.style.filter = used ? 'grayscale(0.35)' : '';
-
-      renderWordBadge(item, count);
-    });
-  }
-
-  function wrapInput(input) {
-    if (!input.closest('.wuep-input-wrap')) {
-      const wrap = document.createElement('span');
-      wrap.className = 'wuep-input-wrap';
-      input.parentNode.insertBefore(wrap, input);
-      wrap.appendChild(input);
-
-      const clearBtn = document.createElement('button');
-      clearBtn.type = 'button';
-      clearBtn.className = 'wuep-clear-btn';
-      clearBtn.textContent = '×';
-      clearBtn.hidden = true;
-      clearBtn.addEventListener('click', () => {
-        clearInput(input);
-        input.focus();
-      });
-      wrap.appendChild(clearBtn);
-    }
-
-    if (!state.boundInputs.get(input)) {
-      const onFocus = () => {
-        state.activeInput = input;
-      };
-
-      const onInput = () => {
-        if (!readInputText(input)) clearAssignment(input);
-        updateClearButton(input);
-        recomputeAssignmentsAndUsage();
-        updateWordVisualState();
-      };
-
-      input.addEventListener('focus', onFocus);
-      input.addEventListener('input', onInput);
-      state.boundInputs.set(input, { onFocus, onInput });
-      input.dataset.wuepBound = '1';
-    }
-  }
-
-  function unwrapInput(input) {
-    const bound = state.boundInputs.get(input);
-    if (bound) {
-      input.removeEventListener('focus', bound.onFocus);
-      input.removeEventListener('input', bound.onInput);
-      state.boundInputs.delete(input);
-    }
-
-    delete input.dataset.wuepBound;
-
-    const wrap = input.closest('.wuep-input-wrap');
-    if (!wrap || !wrap.parentNode) return;
-    wrap.parentNode.insertBefore(input, wrap);
-    wrap.remove();
-  }
-
-  function assignWordToInput(word, input) {
-    if (!word || !input) return false;
-
-    const previousWordId = getAssignedWordId(input);
-    const targetAlreadyUsesThisWord = previousWordId === word.id;
-    const usage = state.usageByWordId.get(word.id) || 0;
-
-    if (shouldMarkWordsAsUsed() && usage > 0 && !targetAlreadyUsesThisWord) {
-      return false;
-    }
-
-    setAssignedWordId(input, word.id);
-    state.assignmentByInput.set(input, { wordId: word.id });
-
-    setInputValue(input, word.text);
-    updateClearButton(input);
-
-    recomputeAssignmentsAndUsage();
-    updateWordVisualState();
-    return true;
-  }
-
-  function findNextFillTarget() {
-    const inputs = findInputs();
-    if (!inputs.length) return null;
-
-    const focused =
-      document.activeElement && inputs.includes(document.activeElement) ? document.activeElement : null;
-    if (focused) return focused;
-
-    const active = state.activeInput?.isConnected ? state.activeInput : null;
-    if (active && !readInputText(active)) return active;
-
-    if (active) {
-      const idx = inputs.indexOf(active);
-      if (idx >= 0) {
-        const after = inputs.slice(idx + 1).find((input) => !readInputText(input));
-        if (after) return after;
-      }
-    }
-
-    return inputs.find((input) => !readInputText(input)) || null;
-  }
-
-  function handleWordClick(word) {
-    if (!state.enabled) return;
-
-    const target = findNextFillTarget();
-    if (!target) return;
-
-    if (!assignWordToInput(word, target)) return;
-
-    const inputs = findInputs();
-    const idx = inputs.indexOf(target);
-    const nextEmpty = idx >= 0 ? inputs.slice(idx + 1).find((input) => !readInputText(input)) : null;
-
-    if (nextEmpty) {
-      state.activeInput = nextEmpty;
-      nextEmpty.focus();
-      setCaretToEnd(nextEmpty);
-      return;
-    }
-
-    state.activeInput = target;
-    target.focus();
-    setCaretToEnd(target);
-  }
-
-  function installWordInteractions(items) {
-    state.wordItems = items.map((li, idx) => {
-      const text = normalize(li.textContent);
-      const id = `${idx}:${text.toLowerCase()}`;
-
-      li.classList.add('wuep-word-item');
-      if (!li.style.position) li.style.position = 'relative';
-      li.style.cursor = 'pointer';
-      li.style.userSelect = 'none';
-
-      li.querySelectorAll('.wuep-word-badge').forEach((badgeEl) => badgeEl.remove());
-
-      const payload = { id, text, el: li };
-      const onClick = () => handleWordClick(payload);
-      li.addEventListener('click', onClick, { passive: true });
-
-      return { id, text, el: li, used: false, onClick };
-    });
-  }
-
-  function cleanupWordInteractions() {
-    state.wordItems.forEach((item) => {
-      item.el.classList.remove('wuep-word-item', 'wuep-word-used', 'wuep-word-has-badge');
-      item.el.removeAttribute('data-wuep-usage');
-      item.el.style.opacity = '';
-      item.el.style.textDecoration = '';
-      item.el.style.filter = '';
-      item.el.style.cursor = '';
-      item.el.style.userSelect = '';
-
-      if (item.onClick) item.el.removeEventListener('click', item.onClick);
-    });
-
-    state.wordItems = [];
-    state.usageByWordId.clear();
-    state.assignmentByInput = new WeakMap();
-  }
-
-  function reconcileWordListMode() {
-    const inputs = findInputs();
-    inputs.forEach((input) => {
-      wrapInput(input);
-      updateClearButton(input);
-    });
-
-    recomputeAssignmentsAndUsage();
-    updateWordVisualState();
-  }
-
-  function mountWordListMode() {
-    const items = findWordList();
-    if (!items.length) return false;
-
-    cleanupWordInteractions();
-    installWordInteractions(items);
-    reconcileWordListMode();
-
-    state.mode = 'word-list';
-    window.__wuepExerciseProbe = 'snacks-mounted-word-list';
-    return true;
   }
 
   // ------------------------
@@ -1197,10 +888,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     teardownCompleteUi();
     reorderMode.unmount();
     rewriteMode.unmount();
-    cleanupWordInteractions();
-    findInputs().forEach((input) => unwrapInput(input));
-
-    state.activeInput = null;
+    wordListMode.unmount();
     state.mode = null;
     state.bootstrapped = false;
     window.__wuepExerciseProbe = 'disabled';
@@ -1239,7 +927,9 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
       return;
     }
 
-    if (!isSituationQuestionPage() && mountWordListMode()) {
+    if (!isSituationQuestionPage() && wordListMode.mount()) {
+      state.mode = 'word-list';
+      window.__wuepExerciseProbe = 'snacks-mounted-word-list';
       state.bootstrapped = true;
       return;
     }
@@ -1297,12 +987,12 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     }
 
     if (state.mode === 'word-list') {
-      if (!state.wordItems.some((w) => w.el.isConnected)) {
+      if (!wordListMode.hasConnectedItems()) {
         state.bootstrapped = false;
         init();
         return;
       }
-      reconcileWordListMode();
+      wordListMode.reconcile();
       return;
     }
 

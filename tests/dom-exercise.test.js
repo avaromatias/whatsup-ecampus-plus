@@ -184,6 +184,79 @@ test('word bank click, clear, and disable preserve native input state and clean 
   }
 });
 
+test('word bank prefers answer lists and keeps saved assignments until the input is cleared', () => {
+  const app = loadExercise(`<main>
+    <ul><li>wrong</li><li>choice</li></ul>
+    <ul class="answer"><li>apple</li><li>pear</li></ul>
+    <input type="text" value="apple" data-wuep-word-id="0:apple">
+    <input type="text">
+  </main>`);
+  try {
+    app.flush();
+    const [first, second] = app.document.querySelectorAll('input');
+    const [apple, pear] = app.document.querySelectorAll('.answer li');
+    const events = recordEvents(second);
+    assert.equal(app.window.__wuepExerciseProbe, 'snacks-mounted-word-list');
+    assert.ok(apple.classList.contains('wuep-word-used'));
+    apple.click();
+    assert.equal(second.value, '', 'a used word cannot fill a different input when unused words suffice');
+    assert.deepEqual(events, []);
+    pear.click();
+    assert.equal(second.value, 'pear');
+    assert.equal(second.getAttribute('data-wuep-word-id'), '1:pear');
+    assert.deepEqual(events, ['input', 'change']);
+
+    first.value = 'my edited answer';
+    first.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    assert.equal(first.getAttribute('data-wuep-word-id'), '0:apple');
+    assert.ok(apple.classList.contains('wuep-word-used'));
+    first.value = '';
+    first.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    assert.equal(first.hasAttribute('data-wuep-word-id'), false);
+    assert.equal(apple.classList.contains('wuep-word-used'), false);
+  } finally {
+    app.close();
+  }
+});
+
+test('word bank tracks repeated assignments, and nested shadow inputs survive SPA teardown', () => {
+  const app = loadExercise('<main><div id="host"></div></main>');
+  try {
+    const shadow = app.document.getElementById('host').attachShadow({ mode: 'open' });
+    shadow.innerHTML = `<ul class="answers"><li>apple</li><li>pear</li></ul>
+      <input type="text" value="apple" data-wuep-word-id="0:apple">
+      <textarea data-wuep-word-id="0:apple">apple</textarea><input type="text">`;
+    app.flush();
+    const [first, second, third] = shadow.querySelectorAll('input, textarea');
+    const apple = shadow.querySelector('li');
+    assert.equal(app.window.__wuepExerciseProbe, 'snacks-mounted-word-list');
+    assert.equal(apple.getAttribute('data-wuep-usage'), '2');
+    assert.equal(apple.classList.contains('wuep-word-has-badge'), true);
+
+    first.parentElement.querySelector('.wuep-clear-btn').click();
+    assert.equal(apple.hasAttribute('data-wuep-usage'), false);
+    assert.equal(apple.classList.contains('wuep-word-used'), false,
+      'used styling is deferred when fewer unused words than empty inputs remain');
+    second.value = 'edited';
+    second.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    assert.equal(second.getAttribute('data-wuep-word-id'), '0:apple');
+
+    app.window.history.pushState({}, '', '/Api/Other');
+    app.flush();
+    assert.equal(shadow.querySelector('.wuep-input-wrap'), null);
+    assert.equal(apple.classList.contains('wuep-word-item'), false);
+    assert.equal(second.value, 'edited');
+    app.window.history.pushState({}, '', '/snacks/COURSE/PAGE');
+    app.flush();
+    assert.equal(app.window.__wuepExerciseProbe, 'snacks-mounted-word-list');
+    assert.equal(shadow.querySelectorAll('.wuep-input-wrap').length, 3);
+    assert.equal(apple.classList.contains('wuep-word-used'), false);
+    assert.equal(third.value, '');
+  } finally {
+    app.close();
+  }
+});
+
 test('rewrite prefills only empty controls, fires input/change, and removes its marker on disable', () => {
   const app = loadExercise(`
     <main>
