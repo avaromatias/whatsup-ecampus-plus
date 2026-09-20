@@ -441,3 +441,113 @@ test('Situation script opens from its FAB and completes a contextual gap', () =>
     app.close();
   }
 });
+
+function deliverSituationScript(app) {
+  app.window.dispatchEvent(new app.window.MessageEvent('message', {
+    source: app.window,
+    data: {
+      source: 'wuep-ecampus-plus', type: 'snack-helpers',
+      helpers: { snackId: 'COURSE', situationScript: [
+        { speaker: 'A', line: 'The first line.' },
+        { speaker: 'B', line: 'The second line.' }
+      ] }
+    }
+  }));
+  app.flush();
+}
+
+test('Situation panel persists hidden and collapsed preferences across SPA exit and return', () => {
+  const app = loadExercise('<main><form><snack-gap><input type="text"></snack-gap></form></main>', 'UNIT_VIDEO_SNACK');
+  try {
+    deliverSituationScript(app);
+    assert.equal(app.document.querySelector('#wuep-script-panel'), null, 'hidden by default');
+    assert.ok(app.document.querySelector('#wuep-script-fab'));
+
+    app.document.querySelector('#wuep-script-fab').click();
+    let panel = app.document.querySelector('#wuep-script-panel');
+    assert.equal(app.window.sessionStorage.getItem('wuep_script_panel_hidden'), '0');
+    assert.equal(app.window.sessionStorage.getItem('wuep_script_panel_collapsed'), '0');
+    assert.deepEqual(Array.from(panel.querySelectorAll('.wuep-script-line'), (line) => line.textContent),
+      ['AThe first line.', 'BThe second line.']);
+
+    panel.querySelector('.wuep-script-collapse').click();
+    assert.equal(panel.classList.contains('wuep-script-panel-collapsed'), true);
+    assert.equal(panel.querySelector('.wuep-script-collapse').getAttribute('aria-expanded'), 'false');
+    assert.equal(app.window.sessionStorage.getItem('wuep_script_panel_collapsed'), '1');
+
+    app.window.history.pushState({}, '', '/Api/Other');
+    app.flush();
+    assert.equal(app.document.querySelector('#wuep-script-panel'), null);
+    assert.equal(app.document.querySelector('#wuep-script-fab'), null);
+    assert.equal(app.window.sessionStorage.getItem('wuep_script_panel_hidden'), '0');
+
+    app.window.history.pushState({}, '', '/snacks/COURSE/UNIT_VIDEO_SNACK');
+    app.flush();
+    panel = app.document.querySelector('#wuep-script-panel');
+    assert.ok(panel, 'visible preference survives SPA re-entry');
+    assert.equal(panel.classList.contains('wuep-script-panel-collapsed'), true);
+    assert.equal(app.document.querySelector('#wuep-script-fab'), null);
+
+    panel.querySelector('.wuep-script-toggle').click();
+    assert.equal(app.window.sessionStorage.getItem('wuep_script_panel_hidden'), '1');
+    assert.equal(app.document.querySelector('#wuep-script-panel'), null);
+    assert.ok(app.document.querySelector('#wuep-script-fab'));
+    app.document.querySelector('#wuep-script-fab').click();
+    panel = app.document.querySelector('#wuep-script-panel');
+    assert.equal(panel.classList.contains('wuep-script-panel-collapsed'), false,
+      'opening from the FAB resets collapse');
+    app.enabled(false);
+    assert.equal(app.document.querySelector('#wuep-script-panel'), null);
+    assert.equal(app.document.querySelector('#wuep-script-fab'), null);
+  } finally {
+    app.close();
+  }
+});
+
+test('Situation panel applies saved position, clamps it, and persists drag completion', () => {
+  const app = loadExercise('<main><form></form></main>', 'UNIT_VIDEO_SNACK');
+  try {
+    app.window.sessionStorage.setItem('wuep_script_panel_hidden', '0');
+    app.window.sessionStorage.setItem('wuep_script_panel_pos', JSON.stringify({ left: -30, top: 9999 }));
+    deliverSituationScript(app);
+    const panel = app.document.querySelector('#wuep-script-panel');
+    assert.equal(panel.style.left, '8px');
+    assert.equal(panel.style.top, '712px');
+    assert.equal(panel.style.right, 'auto');
+
+    const header = panel.querySelector('.wuep-script-header');
+    header.setPointerCapture = () => {};
+    header.hasPointerCapture = () => false;
+    panel.getBoundingClientRect = () => ({ left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) });
+    const pointer = (type, x, y) => {
+      const event = new app.window.Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, { button: 0, pointerId: 1, clientX: x, clientY: y });
+      header.dispatchEvent(event);
+    };
+    pointer('pointerdown', 10, 10);
+    pointer('pointermove', 30, 0);
+    pointer('pointerup', 30, 0);
+    assert.equal(header.classList.contains('wuep-script-dragging'), false);
+    assert.deepEqual(JSON.parse(app.window.sessionStorage.getItem('wuep_script_panel_pos')),
+      { left: 28, top: 702 });
+  } finally {
+    app.close();
+  }
+});
+
+test('Situation panel remains usable when session storage is unavailable', () => {
+  const app = loadExercise('<main><form></form></main>', 'UNIT_VIDEO_SNACK');
+  try {
+    Object.defineProperty(app.window, 'sessionStorage', { configurable: true, get() { throw new Error('blocked'); } });
+    deliverSituationScript(app);
+    assert.ok(app.document.querySelector('#wuep-script-fab'));
+    app.document.querySelector('#wuep-script-fab').click();
+    assert.ok(app.document.querySelector('#wuep-script-panel'));
+    app.document.querySelector('.wuep-script-collapse').click();
+    app.document.querySelector('.wuep-script-toggle').click();
+    assert.equal(app.document.querySelector('#wuep-script-panel'), null);
+    assert.ok(app.document.querySelector('#wuep-script-fab'));
+  } finally {
+    app.close();
+  }
+});

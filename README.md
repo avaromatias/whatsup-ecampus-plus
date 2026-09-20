@@ -97,7 +97,7 @@ Class type is inferred from row title:
 - Manifest V3
 - Schedule content script (`src/content.js`)
 - Schedule content styles (`src/content.css`)
-- Snacks content-script entrypoint (`src/exercise.js`), reorder, rewrite, and word-list modes (`src/exercise/*-mode.js`), text helpers (`src/exercise/text.js`), and pure Situation matching (`src/exercise/situation-match.js`)
+- Snacks content-script entrypoint (`src/exercise.js`), reorder, rewrite, and word-list modes (`src/exercise/*-mode.js`), Situation panel UI (`src/exercise/situation-panel.js`), text helpers (`src/exercise/text.js`), and pure Situation matching (`src/exercise/situation-match.js`)
 - Generated Snacks content script (`dist/exercise.js`, built with esbuild)
 - Snacks Launch interceptor (`src/exercise-bridge.js`, `src/snack-extract.js`)
 - Snacks content styles (`src/exercise.css`)
@@ -123,6 +123,7 @@ Class type is inferred from row title:
     │   ├── reorder-mode.js
     │   ├── rewrite-mode.js
     │   ├── situation-match.js
+    │   ├── situation-panel.js
     │   ├── text.js
     │   └── word-list-mode.js
     ├── exercise-bridge.js
