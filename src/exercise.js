@@ -1,5 +1,6 @@
 import { normalize } from './exercise/text.js';
 import { createReorderMode } from './exercise/reorder-mode.js';
+import { createRewriteMode } from './exercise/rewrite-mode.js';
 import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
 
 (() => {
@@ -7,7 +8,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
 
   const ENABLED_KEY = 'wuep_enabled';
   const ASSIGN_ATTR = 'data-wuep-word-id';
-  const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
   const HELPERS_PREFIX = 'wuep_helpers:';
   const SCRIPT_PANEL_ID = 'wuep-script-panel';
   const SCRIPT_FAB_ID = 'wuep-script-fab';
@@ -31,9 +31,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     usageByWordId: new Map(),
     boundInputs: new WeakMap(),
 
-    // rewrite mode
-    rewriteItems: [],
-
     // situation / speech-lab helpers
     situationScript: [],
     speechStatements: [],
@@ -44,6 +41,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
   };
 
   const reorderMode = createReorderMode({ document, getStorage: () => localStorage, pathname: location.pathname, readInputText, setInputValue });
+  const rewriteMode = createRewriteMode({ document, hasWordList: () => findWordList().length > 0, readInputText, setInputValue });
 
   let observer = null;
   let queued = false;
@@ -329,84 +327,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     findInputs().forEach((input) => {
       delete input.dataset.wuepCompleteBound;
     });
-  }
-
-  // ------------------------
-  // Rewrite mode (sentence prefill)
-  // ------------------------
-
-  function findRewriteContainers() {
-    return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
-      const textEls = Array.from(container.querySelectorAll('.question-text')).filter((el) => {
-        const text = normalize(el.textContent);
-        return text && !text.includes('|') && !/_{2,}/.test(text);
-      });
-
-      // Rewrite/transform exercises carry a single full sentence prompt.
-      // Gap-fill exercises split the sentence around the input in multiple text nodes.
-      if (textEls.length !== 1) return false;
-
-      const inputEl = container.querySelector(
-        'snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea'
-      );
-      return Boolean(inputEl);
-    });
-  }
-
-  function shouldEnableRewriteMode(containers) {
-    if (!containers.length) return false;
-
-    // Never run rewrite prefill in word-bank exercises.
-    if (findWordList().length > 0) return false;
-
-    // Defensive: avoid stepping into option-based/drag/drop snack variants.
-    const hasChoiceLikeUi = Boolean(
-      document.querySelector(
-        '.wuep-reorder-bank, .fill-container .option, .fill-container [role="option"], .fill-container .drag, .fill-container .draggable, .fill-container .dropzone, .fill-container ul li, .fill-container ol li'
-      )
-    );
-    if (hasChoiceLikeUi) return false;
-
-    return true;
-  }
-
-  function extractRewriteSentence(textEl) {
-    return normalize(textEl?.textContent || '');
-  }
-
-  function mountRewriteMode() {
-    const containers = findRewriteContainers();
-    if (!shouldEnableRewriteMode(containers)) return false;
-
-    state.rewriteItems = containers.map((container, idx) => {
-      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => {
-        const text = normalize(el.textContent);
-        return text && !text.includes('|') && !/_{2,}/.test(text);
-      });
-      const inputEl = container.querySelector(
-        'snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea'
-      );
-      const sentence = extractRewriteSentence(textEl);
-
-      if (inputEl && sentence && !readInputText(inputEl) && !inputEl.hasAttribute(REWRITE_PREFILL_ATTR)) {
-        setInputValue(inputEl, sentence);
-      }
-
-      if (inputEl) inputEl.setAttribute(REWRITE_PREFILL_ATTR, '1');
-
-      return { id: `${idx}`, container, textEl, inputEl, sentence };
-    });
-
-    state.mode = 'rewrite';
-    window.__wuepExerciseProbe = 'snacks-mounted-rewrite';
-    return true;
-  }
-
-  function teardownRewriteMode() {
-    state.rewriteItems.forEach((item) => {
-      item.inputEl?.removeAttribute(REWRITE_PREFILL_ATTR);
-    });
-    state.rewriteItems = [];
   }
 
   // ------------------------
@@ -1276,7 +1196,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     teardownSituationAutocomplete();
     teardownCompleteUi();
     reorderMode.unmount();
-    teardownRewriteMode();
+    rewriteMode.unmount();
     cleanupWordInteractions();
     findInputs().forEach((input) => unwrapInput(input));
 
@@ -1312,7 +1232,9 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
       return;
     }
 
-    if (!isSituationQuestionPage() && !isSpeechLabDictationPage() && mountRewriteMode()) {
+    if (!isSituationQuestionPage() && !isSpeechLabDictationPage() && rewriteMode.mount()) {
+      state.mode = 'rewrite';
+      window.__wuepExerciseProbe = 'snacks-mounted-rewrite';
       state.bootstrapped = true;
       return;
     }
@@ -1367,7 +1289,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     }
 
     if (state.mode === 'rewrite') {
-      if (!state.rewriteItems.some((item) => item.container?.isConnected)) {
+      if (!rewriteMode.hasConnectedItems()) {
         state.bootstrapped = false;
         init();
       }

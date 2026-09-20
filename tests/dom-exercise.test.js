@@ -215,6 +215,81 @@ test('rewrite prefills only empty controls, fires input/change, and removes its 
   }
 });
 
+test('rewrite ignores split prompts and choice-based exercises', () => {
+  const cases = [
+    `<div class="fill-container"><span class="question-text">Before</span><snack-gap><input type="text"></snack-gap><span class="question-text">after</span></div>`,
+    `<div class="fill-container"><span class="question-text">Rewrite ____ here.</span><snack-gap><input type="text"></snack-gap></div>`,
+    `<div class="fill-container"><span class="question-text">Rewrite this.</span><snack-gap><input type="text"></snack-gap><span class="option">A</span></div>`,
+    `<ul class="answers"><li>word</li><li>bank</li></ul><div class="fill-container"><span class="question-text">Rewrite this.</span><snack-gap><input type="text"></snack-gap></div>`
+  ];
+
+  cases.forEach((markup) => {
+    const app = loadExercise(`<main>${markup}</main>`);
+    try {
+      const input = app.document.querySelector('input');
+      const events = recordEvents(input);
+      app.flush();
+      assert.notEqual(app.window.__wuepExerciseProbe, 'snacks-mounted-rewrite');
+      assert.equal(input.value, '');
+      assert.equal(input.hasAttribute('data-wuep-rewrite-prefilled'), false);
+      assert.deepEqual(events, []);
+    } finally {
+      app.close();
+    }
+  });
+});
+
+test('rewrite supports editable and textarea controls without replacing their existing answers', () => {
+  const app = loadExercise(`<main>
+    <div class="fill-container"><div class="question-text">  Editable   prompt.  </div>
+      <snack-gap><div class="input" contenteditable="true"></div></snack-gap></div>
+    <div class="fill-container"><div class="question-text">Textarea prompt.</div>
+      <snack-gap><textarea>My answer</textarea></snack-gap></div>
+  </main>`);
+  try {
+    const editable = app.document.querySelector('[contenteditable]');
+    const textarea = app.document.querySelector('textarea');
+    const editableEvents = recordEvents(editable);
+    const textareaEvents = recordEvents(textarea);
+    app.flush();
+    assert.equal(editable.textContent, 'Editable prompt.');
+    assert.equal(textarea.value, 'My answer');
+    assert.deepEqual(editableEvents, ['input', 'change']);
+    assert.deepEqual(textareaEvents, []);
+    assert.equal(editable.dataset.wuepRewritePrefilled, '1');
+    assert.equal(textarea.dataset.wuepRewritePrefilled, '1');
+  } finally {
+    app.close();
+  }
+});
+
+test('rewrite removes its marker on SPA exit and remounts without replacing an answer', () => {
+  const app = loadExercise(`<main><div class="fill-container"><div class="question-text">Original prompt.</div>
+    <snack-gap><input type="text"></snack-gap></div></main>`);
+  try {
+    const input = app.document.querySelector('input');
+    const events = recordEvents(input);
+    app.flush();
+    assert.equal(input.value, 'Original prompt.');
+    assert.equal(input.dataset.wuepRewritePrefilled, '1');
+
+    input.value = 'My answer';
+    app.window.history.pushState({}, '', '/Api/Other');
+    app.flush();
+    assert.equal(input.hasAttribute('data-wuep-rewrite-prefilled'), false);
+    assert.equal(input.value, 'My answer');
+
+    app.window.history.pushState({}, '', '/snacks/COURSE/PAGE');
+    app.flush();
+    assert.equal(app.window.__wuepExerciseProbe, 'snacks-mounted-rewrite');
+    assert.equal(input.dataset.wuepRewritePrefilled, '1');
+    assert.equal(input.value, 'My answer');
+    assert.deepEqual(events, ['input', 'change']);
+  } finally {
+    app.close();
+  }
+});
+
 test('Speech Lab completion buttons apply bridge-delivered statements and teardown their wrappers', () => {
   const app = loadExercise(`
     <main><form><snack-gap><input type="text"></snack-gap>
