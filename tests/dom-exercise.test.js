@@ -55,6 +55,97 @@ function recordEvents(element) {
   return events;
 }
 
+function reorderMarkup(prompt = '?\nhello | HELLO | world.') {
+  return `<main><div class="fill-container"><div class="question-text">${prompt}</div>
+    <div class="fill-gap"><snack-gap><input type="text"></snack-gap></div></div></main>`;
+}
+
+function dragEvent(window, type, dataTransfer) {
+  const event = new window.Event(type, { bubbles: true, cancelable: true });
+  event.dataTransfer = dataTransfer;
+  return event;
+}
+
+test('reorder chips retain punctuation/casing, persist drag order, and clean up on disable', () => {
+  const app = loadExercise(reorderMarkup());
+  try {
+    const input = app.document.querySelector('input');
+    const events = recordEvents(input);
+    app.flush();
+    const prompt = app.document.querySelector('.question-text');
+    const bank = app.document.querySelector('.wuep-reorder-bank');
+    assert.equal(app.window.__wuepExerciseProbe, 'snacks-mounted-reorder');
+    assert.equal(prompt.textContent, '?');
+    assert.deepEqual(Array.from(bank.children, (chip) => chip.textContent), ['hello', 'HELLO', 'world.']);
+    assert.equal(input.value, 'Hello HELLO world.');
+    assert.deepEqual(events, ['input', 'change']);
+
+    const rejectedDrop = (value, target) => target.dispatchEvent(dragEvent(app.window, 'drop', {
+      getData() { return value; }
+    }));
+    rejectedDrop('{bad json', bank.children[1]);
+    rejectedDrop(JSON.stringify({ itemId: 'another-row', from: 0 }), bank);
+    assert.deepEqual(Array.from(bank.children, (chip) => chip.textContent), ['hello', 'HELLO', 'world.']);
+    assert.deepEqual(events, ['input', 'change'], 'invalid and cross-item drops do not touch the input');
+
+    const dataTransfer = {
+      effectAllowed: '', value: '',
+      setData(_type, value) { this.value = value; },
+      getData() { return this.value; }
+    };
+    bank.children[0].dispatchEvent(dragEvent(app.window, 'dragstart', dataTransfer));
+    assert.equal(dataTransfer.effectAllowed, 'move');
+    bank.children[2].dispatchEvent(dragEvent(app.window, 'drop', dataTransfer));
+    assert.deepEqual(Array.from(bank.children, (chip) => chip.textContent), ['HELLO', 'world.', 'hello']);
+    assert.equal(input.value, 'HELLO world. hello');
+    assert.deepEqual(events, ['input', 'change', 'input', 'change']);
+    assert.deepEqual(JSON.parse(app.window.localStorage.getItem('wuep_reorder_state:/snacks/COURSE/PAGE')),
+      { 0: ['HELLO', 'world.', 'hello'] });
+
+    bank.children[0].dispatchEvent(dragEvent(app.window, 'dragstart', dataTransfer));
+    bank.dispatchEvent(dragEvent(app.window, 'drop', dataTransfer));
+    assert.deepEqual(Array.from(bank.children, (chip) => chip.textContent), ['world.', 'hello', 'HELLO']);
+    assert.equal(input.value, 'World. hello HELLO');
+    assert.deepEqual(events, ['input', 'change', 'input', 'change', 'input', 'change']);
+
+    bank.children[2].dispatchEvent(dragEvent(app.window, 'dragstart', dataTransfer));
+    bank.children[2].dispatchEvent(dragEvent(app.window, 'drop', dataTransfer));
+    assert.deepEqual(events, ['input', 'change', 'input', 'change', 'input', 'change'],
+      'dropping a chip on itself is a no-op');
+    bank.dispatchEvent(dragEvent(app.window, 'drop', dataTransfer));
+    assert.deepEqual(events, ['input', 'change', 'input', 'change', 'input', 'change', 'input', 'change'],
+      'dropping the last chip on the bank still synchronizes the input');
+
+    app.enabled(false);
+    assert.equal(prompt.textContent, '?\nhello | HELLO | world.');
+    assert.equal(app.document.querySelector('.wuep-reorder-bank'), null);
+    assert.equal(app.document.querySelector('.wuep-reorder-container'), null);
+    assert.equal(input.value, 'World. hello HELLO', 'teardown leaves the native input alone');
+  } finally {
+    app.close();
+  }
+});
+
+test('reorder preserves an existing answer over stored tokens without input events', () => {
+  const app = loadExercise(reorderMarkup('alpha | beta | gamma'));
+  try {
+    const input = app.document.querySelector('input');
+    input.value = 'beta alpha gamma';
+    const events = recordEvents(input);
+    app.window.localStorage.setItem('wuep_reorder_state:/snacks/COURSE/PAGE',
+      JSON.stringify({ 0: ['gamma', 'alpha', 'beta'] }));
+    app.flush();
+    assert.equal(input.value, 'beta alpha gamma');
+    assert.deepEqual(events, []);
+    assert.deepEqual(Array.from(app.document.querySelector('.wuep-reorder-bank').children, (chip) => chip.textContent),
+      ['beta', 'alpha', 'gamma']);
+    assert.deepEqual(JSON.parse(app.window.localStorage.getItem('wuep_reorder_state:/snacks/COURSE/PAGE')),
+      { 0: ['beta', 'alpha', 'gamma'] });
+  } finally {
+    app.close();
+  }
+});
+
 test('word bank click, clear, and disable preserve native input state and clean UI', () => {
   const app = loadExercise(`
     <main><ul class="answers"><li>apple</li><li>pear</li></ul>

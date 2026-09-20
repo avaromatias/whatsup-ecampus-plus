@@ -65,8 +65,7 @@ function loadExercise(pathname = '/snacks/COURSE/PAGE', { boot = false, enabled 
   // untouched; the test hooks into its inner content-script closure.
   const instrumented = source.replace(/\n  \}\)\(\);\s*\n\}\)\(\);\s*$/, `
     window.__characterizeExercise = {
-      state, parseTokens, parseInputTokens, extractDisplayPunctuation, tokenizeWords,
-      remapWithBaseCasing, toSentence, loadReorderPersisted, saveReorderPersisted,
+      state, tokenizeWords,
       answerFromScript, saveHelpersCache, loadHelpersCache, onHelpersMessage
     };
   })();
@@ -93,30 +92,28 @@ function fakeReorderContainer(input) {
     text, get bank() { return bank; },
     classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name) },
     querySelectorAll: (selector) => selector === '.question-text' ? [text] : [],
-    querySelector: (selector) => selector === '.wuep-reorder-bank' ? bank : selector === '.fill-gap' ? anchor : selector.includes('snack-gap') ? input : null
+    querySelector: (selector) => selector === '.wuep-reorder-bank' ? (bank?.parentNode ? bank : null) : selector === '.fill-gap' ? anchor : selector.includes('snack-gap') ? input : null
   };
 }
 
-test('reorder tokens retain base casing, duplicate tokens, and displayed punctuation', () => {
-  const { exercise } = loadExercise();
-  assert.deepEqual(plain(exercise.parseTokens('?\nhello | HELLO | world.')), ['hello', 'HELLO', 'world.']);
-  assert.equal(exercise.extractDisplayPunctuation('?\nhello | world'), '?');
-  assert.deepEqual(plain(exercise.parseInputTokens('Hello hello world.')), ['Hello', 'hello', 'world']);
-  assert.deepEqual(plain(exercise.remapWithBaseCasing(['HELLO', 'hello', 'WORLD'], ['hello', 'HELLO', 'world'])),
-    ['hello', 'HELLO', 'world']);
-  assert.equal(exercise.toSentence(['hello', 'HELLO', 'world']), 'Hello HELLO world');
-});
-
 test('reorder persistence is keyed by the initial path and tolerates corrupt storage', () => {
-  const harness = loadExercise('/snacks/COURSE/ONE');
-  harness.exercise.state.reorderItems = [{ id: '0', tokens: ['Hello', 'world'] }];
-  harness.exercise.saveReorderPersisted();
+  const containers = [];
+  const harness = loadExercise('/snacks/COURSE/ONE', { boot: true, containers });
+  containers.push(fakeReorderContainer(new harness.Input()));
+  harness.flush();
   assert.deepEqual(JSON.parse(harness.values.get('local:wuep_reorder_state:/snacks/COURSE/ONE')),
-    { 0: ['Hello', 'world'] });
+    { 0: ['hello', 'world'] });
   harness.location.pathname = '/snacks/COURSE/TWO';
-  assert.deepEqual(plain(harness.exercise.loadReorderPersisted()), { 0: ['Hello', 'world'] });
+  harness.change({ wuep_enabled: { newValue: false } });
+  harness.change({ wuep_enabled: { newValue: true } });
+  harness.flush();
+  assert.equal(harness.values.has('local:wuep_reorder_state:/snacks/COURSE/TWO'), false);
   harness.values.set('local:wuep_reorder_state:/snacks/COURSE/ONE', '{bad json');
-  assert.deepEqual(plain(harness.exercise.loadReorderPersisted()), {});
+  harness.change({ wuep_enabled: { newValue: false } });
+  harness.change({ wuep_enabled: { newValue: true } });
+  harness.flush();
+  assert.deepEqual(JSON.parse(harness.values.get('local:wuep_reorder_state:/snacks/COURSE/ONE')),
+    { 0: ['hello', 'world'] }, 'corrupt state falls back to prompt tokens');
 });
 
 test('Situation matching chooses a full option, then extracts a cased gap from script', () => {

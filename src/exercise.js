@@ -1,11 +1,5 @@
-import {
-  normalize,
-  extractDisplayPunctuation,
-  parseTokens,
-  parseInputTokens,
-  toSentence,
-  remapWithBaseCasing
-} from './exercise/text.js';
+import { normalize } from './exercise/text.js';
+import { createReorderMode } from './exercise/reorder-mode.js';
 import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
 
 (() => {
@@ -13,7 +7,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
 
   const ENABLED_KEY = 'wuep_enabled';
   const ASSIGN_ATTR = 'data-wuep-word-id';
-  const REORDER_STORAGE_KEY = `wuep_reorder_state:${location.pathname}`;
   const REWRITE_PREFILL_ATTR = 'data-wuep-rewrite-prefilled';
   const HELPERS_PREFIX = 'wuep_helpers:';
   const SCRIPT_PANEL_ID = 'wuep-script-panel';
@@ -38,9 +31,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     usageByWordId: new Map(),
     boundInputs: new WeakMap(),
 
-    // reorder mode
-    reorderItems: [],
-
     // rewrite mode
     rewriteItems: [],
 
@@ -52,6 +42,8 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     speechPrefillItems: [],
     situationGapItems: []
   };
+
+  const reorderMode = createReorderMode({ document, getStorage: () => localStorage, pathname: location.pathname, readInputText, setInputValue });
 
   let observer = null;
   let queued = false;
@@ -337,219 +329,6 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     findInputs().forEach((input) => {
       delete input.dataset.wuepCompleteBound;
     });
-  }
-
-  // ------------------------
-  // Reorder mode (Duolingo-style)
-  // ------------------------
-
-  function findReorderContainers() {
-    return Array.from(document.querySelectorAll('.fill-container')).filter((container) => {
-      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
-      const input = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
-      return Boolean(textEl && input);
-    });
-  }
-
-  function loadReorderPersisted() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(REORDER_STORAGE_KEY) || '{}');
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
-    }
-  }
-
-  function saveReorderPersisted() {
-    try {
-      const payload = {};
-      state.reorderItems.forEach((item) => {
-        payload[item.id] = item.tokens;
-      });
-      localStorage.setItem(REORDER_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // ignore
-    }
-  }
-
-  function renderReorderBank(item) {
-    if (!item.bankEl) return;
-
-    item.bankEl.innerHTML = '';
-    item.tokens.forEach((token, idx) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'wuep-reorder-chip';
-      chip.textContent = token;
-      chip.draggable = true;
-      chip.dataset.index = String(idx);
-
-      chip.addEventListener('dragstart', (event) => {
-        chip.classList.add('wuep-dragging');
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', JSON.stringify({ itemId: item.id, from: idx }));
-      });
-
-      chip.addEventListener('dragend', () => {
-        chip.classList.remove('wuep-dragging');
-        item.bankEl.querySelectorAll('.wuep-drop-target').forEach((el) => el.classList.remove('wuep-drop-target'));
-      });
-
-      chip.addEventListener('dragover', (event) => {
-        event.preventDefault();
-        chip.classList.add('wuep-drop-target');
-      });
-
-      chip.addEventListener('dragleave', () => chip.classList.remove('wuep-drop-target'));
-
-      chip.addEventListener('drop', (event) => {
-        event.preventDefault();
-        chip.classList.remove('wuep-drop-target');
-
-        let payload = null;
-        try {
-          payload = JSON.parse(event.dataTransfer.getData('text/plain'));
-        } catch {
-          return;
-        }
-
-        if (!payload || payload.itemId !== item.id) return;
-        const from = Number(payload.from);
-        const to = idx;
-        if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
-
-        const next = [...item.tokens];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
-        item.tokens = next;
-
-        applyReorderItemToInput(item);
-        renderReorderBank(item);
-        saveReorderPersisted();
-      });
-
-      item.bankEl.appendChild(chip);
-    });
-
-    if (!item.bankEl.dataset.wuepDnDBound) {
-      item.bankEl.addEventListener('dragover', (event) => {
-        event.preventDefault();
-      });
-
-      item.bankEl.addEventListener('drop', (event) => {
-        const target = event.target;
-        if (target?.classList?.contains('wuep-reorder-chip')) return;
-
-        let payload = null;
-        try {
-          payload = JSON.parse(event.dataTransfer.getData('text/plain'));
-        } catch {
-          return;
-        }
-
-        if (!payload || payload.itemId !== item.id) return;
-        const from = Number(payload.from);
-        if (!Number.isInteger(from)) return;
-
-        const next = [...item.tokens];
-        const [moved] = next.splice(from, 1);
-        next.push(moved);
-        item.tokens = next;
-
-        applyReorderItemToInput(item);
-        renderReorderBank(item);
-        saveReorderPersisted();
-      });
-
-      item.bankEl.dataset.wuepDnDBound = '1';
-    }
-  }
-
-  function applyReorderItemToInput(item) {
-    const sentence = toSentence(item.tokens);
-    setInputValue(item.inputEl, sentence);
-  }
-
-  function mountReorderMode() {
-    const containers = findReorderContainers();
-    if (!containers.length) return false;
-
-    const persisted = loadReorderPersisted();
-
-    state.reorderItems = containers.map((container, idx) => {
-      const textEl = Array.from(container.querySelectorAll('.question-text')).find((el) => (el.textContent || '').includes('|'));
-      const inputEl = container.querySelector('snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea');
-      container.classList.add('wuep-reorder-container');
-      const raw = textEl ? textEl.textContent || '' : '';
-      const baseTokens = parseTokens(raw);
-      const id = `${idx}`;
-
-      const savedTokens = Array.isArray(persisted[id]) ? persisted[id].map((x) => normalize(String(x))).filter((t) => t && t !== '.') : null;
-      const inputExistingValue = readInputText(inputEl);
-      const existingTokens = inputExistingValue ? parseInputTokens(inputExistingValue) : null;
-
-      const hasSameTokenCount = (candidate) => Array.isArray(candidate) && candidate.length === baseTokens.length;
-
-      let tokens = baseTokens;
-      let keepCurrentInput = false;
-
-      if (hasSameTokenCount(existingTokens)) {
-        tokens = remapWithBaseCasing(existingTokens, baseTokens);
-        keepCurrentInput = true;
-      } else if (hasSameTokenCount(savedTokens)) {
-        tokens = remapWithBaseCasing(savedTokens, baseTokens);
-      }
-
-      tokens = remapWithBaseCasing(tokens, baseTokens);
-
-      if (textEl) {
-        textEl.dataset.wuepOriginal = raw;
-        textEl.textContent = extractDisplayPunctuation(raw);
-      }
-
-      let bankEl = container.querySelector('.wuep-reorder-bank');
-      if (!bankEl) {
-        bankEl = document.createElement('div');
-        bankEl.className = 'wuep-reorder-bank';
-
-        const anchor = container.querySelector('.fill-gap') || inputEl?.closest('.fill-gap') || inputEl?.parentElement;
-        if (anchor && anchor.parentNode) {
-          anchor.parentNode.insertBefore(bankEl, anchor.nextSibling);
-        } else {
-          container.appendChild(bankEl);
-        }
-      }
-
-      return { id, container, textEl, inputEl, bankEl, tokens, keepCurrentInput };
-    });
-
-    state.reorderItems.forEach((item) => {
-      renderReorderBank(item);
-      if (!item.keepCurrentInput) {
-        applyReorderItemToInput(item);
-      }
-    });
-    saveReorderPersisted();
-
-    state.mode = 'reorder';
-    window.__wuepExerciseProbe = 'snacks-mounted-reorder';
-    return true;
-  }
-
-  function teardownReorderMode() {
-    state.reorderItems.forEach((item) => {
-      item.container?.classList?.remove('wuep-reorder-container');
-
-      if (item.textEl) {
-        const original = item.textEl.dataset.wuepOriginal;
-        if (typeof original === 'string') item.textEl.textContent = original;
-        delete item.textEl.dataset.wuepOriginal;
-      }
-
-      if (item.bankEl?.parentNode) item.bankEl.remove();
-    });
-
-    state.reorderItems = [];
   }
 
   // ------------------------
@@ -1496,7 +1275,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     teardownSpeechLabPrefill();
     teardownSituationAutocomplete();
     teardownCompleteUi();
-    teardownReorderMode();
+    reorderMode.unmount();
     teardownRewriteMode();
     cleanupWordInteractions();
     findInputs().forEach((input) => unwrapInput(input));
@@ -1526,7 +1305,9 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
       return;
     }
 
-    if (!isSituationQuestionPage() && mountReorderMode()) {
+    if (!isSituationQuestionPage() && reorderMode.mount()) {
+      state.mode = 'reorder';
+      window.__wuepExerciseProbe = 'snacks-mounted-reorder';
       state.bootstrapped = true;
       return;
     }
@@ -1578,7 +1359,7 @@ import { tokenizeWords, answerFromScript } from './exercise/situation-match.js';
     }
 
     if (state.mode === 'reorder') {
-      if (!state.reorderItems.some((item) => item.container?.isConnected)) {
+      if (!reorderMode.hasConnectedItems()) {
         state.bootstrapped = false;
         init();
       }
