@@ -5,10 +5,11 @@ Chrome extension that improves UX in **Schedule a class** and selected **Snacks*
 ## Quick start
 
 1. Clone this repository.
-2. Open `chrome://extensions`.
-3. Enable **Developer mode**.
-4. Click **Load unpacked** and select this project folder.
-5. Open:
+2. Run `npm ci` and `npm run build` to generate the Snacks content-script bundle.
+3. Open `chrome://extensions`.
+4. Enable **Developer mode**.
+5. Click **Load unpacked** and select this project folder.
+6. Open:
    - `https://ecampus.whatsup.es/Api/ScheduleAClass`
    - `https://ecampus.whatsup.es/snacks/*`
 
@@ -96,7 +97,8 @@ Class type is inferred from row title:
 - Manifest V3
 - Schedule content script (`src/content.js`)
 - Schedule content styles (`src/content.css`)
-- Snacks content script (`src/exercise.js`)
+- Snacks content-script entrypoint (`src/exercise.js`), reorder, rewrite, and word-list modes (`src/exercise/*-mode.js`), Situation panel UI (`src/exercise/situation-panel.js`), text helpers (`src/exercise/text.js`), and pure Situation matching (`src/exercise/situation-match.js`)
+- Generated Snacks content script (`dist/exercise.js`, built with esbuild)
 - Snacks Launch interceptor (`src/exercise-bridge.js`, `src/snack-extract.js`)
 - Snacks content styles (`src/exercise.css`)
 - Popup UI (`popup.html`, `popup.css`, `popup.js`)
@@ -110,12 +112,20 @@ Class type is inferred from row title:
 ├── popup.html
 ├── popup.css
 ├── popup.js
+├── package.json
 ├── README.md
 └── src
     ├── content.css
     ├── content.js
     ├── exercise.css
     ├── exercise.js
+    ├── exercise/
+    │   ├── reorder-mode.js
+    │   ├── rewrite-mode.js
+    │   ├── situation-match.js
+    │   ├── situation-panel.js
+    │   ├── text.js
+    │   └── word-list-mode.js
     ├── exercise-bridge.js
     └── snack-extract.js
 ```
