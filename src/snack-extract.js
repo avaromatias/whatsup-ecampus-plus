@@ -179,12 +179,20 @@
     walkSnackNodes(collectFrom, (node) => {
       if (isQuestionNode(node) && node.type === 'trueOrFalse') return;
       const snackId = String(node?.snackId || node?.snackID || '');
-      if (/VIDEO|SCRIPT|SNACK/i.test(snackId) && !/SPEECHLAB/i.test(snackId)) return;
+      if (/VIDEO|SCRIPT|SNACK/i.test(snackId) && !/SPEECHLAB/i.test(snackId) && node?.type !== 'listenAndFill') return;
 
       const data = node?.data || {};
+      const answers = data.validAndStudentAnswers;
+      if (node?.type === 'listenAndFill' && Array.isArray(answers)) {
+        answers.forEach((entry) => {
+          const value = entry?.validAnswers?.[0]?.value;
+          if (typeof value === 'string') pushStatement(value);
+        });
+        return;
+      }
+
       if (typeof data.statement === 'string') pushStatement(data.statement);
 
-      const answers = data.validAndStudentAnswers;
       if (!labPage && Array.isArray(answers) && /SPEECHLAB/i.test(snackId) && !/_LAB/i.test(snackId)) {
         answers.forEach((entry) => {
           const value = entry?.validAnswers?.[0]?.value;

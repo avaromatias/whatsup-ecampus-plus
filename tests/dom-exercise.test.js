@@ -567,6 +567,29 @@ test('Speech Lab record page stores the sentence elements and not their ancestor
   }
 });
 
+test('situation listen and fill completes textareas from stored sentences', () => {
+  const sentence = 'Any idea how you may have injured your back?';
+  const app = loadExercise('<main><form><textarea></textarea></form></main>', 'NC_VIDEO_112_SNACK2');
+  try {
+    app.window.dispatchEvent(new app.window.MessageEvent('message', {
+      source: app.window,
+      data: {
+        source: 'wuep-ecampus-plus', type: 'snack-helpers',
+        helpers: { snackId: 'COURSE', speechStatements: [sentence] }
+      }
+    }));
+    app.flush();
+    const area = app.document.querySelector('textarea');
+    app.document.querySelector('.wuep-complete-one').click();
+    assert.equal(area.value, sentence);
+    area.value = '';
+    app.document.querySelector('#wuep-complete-all').click();
+    assert.equal(area.value, sentence);
+  } finally {
+    app.close();
+  }
+});
+
 test('true or false selects the submitted value when the visible label is inverted', () => {
   const app = loadExercise(`
     <main><form>

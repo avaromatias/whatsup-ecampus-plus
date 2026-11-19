@@ -599,11 +599,14 @@ import { createSituationPanel } from './exercise/situation-panel.js';
   }
 
   function mountSpeechLabPrefill() {
-    if (!isSpeechLabDictationPage()) return false;
+    const situationDictation = isSituationQuestionPage();
+    if (!isSpeechLabDictationPage() && !situationDictation) return false;
     if (!state.speechStatements.length) applyHelpersCache(loadHelpersCache());
     if (!state.speechStatements.length) return false;
 
-    const inputs = findInputs();
+    const inputs = situationDictation
+      ? findInputs().filter((input) => input instanceof HTMLTextAreaElement)
+      : findInputs();
     if (!inputs.length) return false;
 
     state.speechPrefillItems = inputs.map((input, idx) => {

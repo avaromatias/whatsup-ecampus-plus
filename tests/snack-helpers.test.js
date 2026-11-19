@@ -79,6 +79,21 @@ test('speech fallback reads first valid answer from non-lab Speech Lab nodes', (
   });
 });
 
+test('situation listen and fill keeps sentences whose ids contain video', () => {
+  const extract = loadExtractor();
+  const helpers = extract({ snackId: 'SITUATION', children: [
+    { type: 'exercisesPage', snackId: 'NC_VIDEO_112_SNACK2', children: [
+      { type: 'listenAndFill', snackId: 'NC_VIDEO_112_SNACK2_0', data: {
+        validAndStudentAnswers: [{ validAnswers: [{ value: 'Any idea how you may have injured your back?' }] }]
+      } }
+    ] },
+    { type: 'exercisesPage', snackId: 'NC_VIDEO_112_SCRIPT', data: { statement: 'Not a dictation sentence' } },
+    { type: 'trueOrFalse', snackId: 'NC_VIDEO_112_SNACK1', data: { statement: 'Not a dictation sentence either' } }
+  ] });
+
+  assert.deepEqual(plain(helpers.speechStatements), ['Any idea how you may have injured your back?']);
+});
+
 test('situation true or false keeps submitted booleans and the visible-label map', () => {
   const extract = loadExtractor();
   const helpers = extract({ snackId: 'SITUATION', children: [
