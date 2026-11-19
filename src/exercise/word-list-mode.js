@@ -160,12 +160,36 @@ export function createWordListMode({ document, deepFindAll, findInputs, readInpu
     return inputs.find((input) => !readInputText(input)) || null;
   }
 
+  function adjacentPrompt(input) {
+    const container = input.closest('.fill-container');
+    if (!container) return null;
+    const host = input.closest('snack-gap') || input;
+    let before = '';
+    let after = '';
+    container.querySelectorAll('.question-text').forEach((el) => {
+      const text = normalize(el.textContent);
+      if (!text) return;
+      const position = host.compareDocumentPosition(el);
+      if (position & Node.DOCUMENT_POSITION_PRECEDING) before = normalize(`${before} ${text}`);
+      if (position & Node.DOCUMENT_POSITION_FOLLOWING) after = normalize(`${after} ${text}`);
+    });
+    return { before, after };
+  }
+
+  function textForGap(text, input) {
+    const prompt = adjacentPrompt(input);
+    if (!prompt || (!prompt.before && !prompt.after)) return text;
+    const starts = !prompt.before || /[.!?]['"]?\s*$/.test(prompt.before);
+    if (!starts) return text;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
   function assignWord(word, input) {
     const alreadyAssigned = assignedId(input) === word.id;
     if (shouldMarkUsed() && usageById.get(word.id) > 0 && !alreadyAssigned) return false;
 
     setAssignedId(input, word.id);
-    setInputValue(input, word.text);
+    setInputValue(input, textForGap(word.text, input));
     updateClearButton(input);
     refreshUsage();
     return true;

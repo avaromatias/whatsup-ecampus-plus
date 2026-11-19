@@ -207,6 +207,38 @@ test('reorder preserves an existing answer over stored tokens without input even
   }
 });
 
+test('word bank capitalizes a fill that starts a sentence', () => {
+  const app = loadExercise(`<main>
+    <ul class="answers"><li>all</li><li>however</li><li>in case</li></ul>
+    <div class="fill-container">
+      <snack-gap><input type="text"></snack-gap>
+      <span class="question-text">of the seats are taken.</span>
+    </div>
+    <div class="fill-container">
+      <span class="question-text">The hall is full.</span>
+      <snack-gap><input type="text"></snack-gap>
+    </div>
+    <div class="fill-container">
+      <span class="question-text">Bring a coat</span>
+      <snack-gap><input type="text"></snack-gap>
+      <span class="question-text">it rains.</span>
+    </div>
+  </main>`);
+  try {
+    app.flush();
+    const [first, second, third] = app.document.querySelectorAll('input');
+    const [all, however, inCase] = app.document.querySelectorAll('.answers li');
+    all.click();
+    assert.equal(first.value, 'All');
+    however.click();
+    assert.equal(second.value, 'However');
+    inCase.click();
+    assert.equal(third.value, 'in case');
+  } finally {
+    app.close();
+  }
+});
+
 test('word bank click, clear, and disable preserve native input state and clean UI', () => {
   const app = loadExercise(`
     <main><ul class="answers"><li>apple</li><li>pear</li></ul>
