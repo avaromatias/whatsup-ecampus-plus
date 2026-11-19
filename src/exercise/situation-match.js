@@ -38,31 +38,48 @@ function restoreCasing(extracted, line) {
   return hay.slice(idx, idx + extracted.length);
 }
 
+function sentencesOf(line) {
+  const parts = normalize(line).split(/(?<=[.!?])\s+/).filter(Boolean);
+  return parts.length ? parts : [normalize(line)];
+}
+
+function findLastSequenceBefore(hay, needle, end) {
+  if (!needle.length) return -1;
+  let found = -1;
+  const lastStart = Math.min(hay.length, end) - needle.length;
+  for (let i = 0; i <= lastStart; i += 1) {
+    let matches = true;
+    for (let j = 0; j < needle.length; j += 1) {
+      if (hay[i + j] !== needle[j]) matches = false;
+    }
+    if (matches) found = i;
+  }
+  return found;
+}
+
 function extractGapFromLine(line, left, right) {
   const hay = tokenizeWords(line);
   const leftTokens = tokenizeWords(left);
   const rightTokens = tokenizeWords(right);
   const minKeep = Math.min(3, rightTokens.length);
-  const leftIdx = leftTokens.length ? findTokenSequence(hay, leftTokens) : 0;
+  const rightAt = rightTokens.length ? findPrefixSequence(hay, rightTokens, minKeep) : hay.length;
+  if (rightAt < 0) return null;
 
-  if (leftIdx < 0) {
-    if (!rightTokens.length) return '';
-    const rightAt = findPrefixSequence(hay, rightTokens, minKeep);
-    if (rightAt <= 0) return '';
+  const leftIdx = findLastSequenceBefore(hay, leftTokens, rightAt);
+  let start = leftIdx >= 0 ? leftIdx + leftTokens.length : 0;
+  let leftMatched = leftIdx >= 0;
+
+  if (!leftMatched && leftTokens.length) {
+    if (rightAt <= 0) return null;
     const lastLeft = leftTokens[leftTokens.length - 1];
-    let start = rightAt - 1;
-    if (lastLeft) {
-      const lastLeftIdx = hay.lastIndexOf(lastLeft, rightAt - 1);
-      if (lastLeftIdx >= 0 && lastLeftIdx < rightAt) start = lastLeftIdx + 1;
-    }
-    return hay.slice(Math.max(0, start), rightAt).join(' ');
+    const lastLeftIdx = hay.lastIndexOf(lastLeft, rightAt - 1);
+    start = lastLeftIdx >= 0 && lastLeftIdx < rightAt ? lastLeftIdx + 1 : rightAt - 1;
+    leftMatched = lastLeftIdx >= 0 && lastLeftIdx < rightAt;
   }
 
-  const from = leftTokens.length ? leftIdx + leftTokens.length : 0;
-  const rest = hay.slice(from);
-  const rightIdx = rightTokens.length ? findPrefixSequence(rest, rightTokens, minKeep) : rest.length;
-  if (rightIdx < 0) return '';
-  return rest.slice(0, rightIdx).join(' ');
+  const text = hay.slice(Math.max(0, start), rightAt).join(' ');
+  if (!text) return null;
+  return { text, leftMatched };
 }
 
 export function answerFromScript(script, left, right, options) {
@@ -82,14 +99,20 @@ export function answerFromScript(script, left, right, options) {
     if (bestOption.option) return bestOption.option;
   }
 
-  let best = { answer: '', score: -1 };
+  let best = { answer: '', score: -1, leftMatched: false };
   lines.forEach((line) => {
-    const extracted = extractGapFromLine(line, left, right);
-    if (!extracted) return;
-    const count = tokenizeWords(extracted).length;
-    if (!count || count > 8) return;
-    const score = 40 - count + Math.min(tokenizeWords(left).length + tokenizeWords(right).length, 20);
-    if (score > best.score) best = { answer: restoreCasing(extracted, line), score };
+    sentencesOf(line).forEach((sentence) => {
+      const extracted = extractGapFromLine(sentence, left, right);
+      if (!extracted) return;
+      const count = tokenizeWords(extracted.text).length;
+      if (!count || count > 8) return;
+      const score = 40 - count + Math.min(tokenizeWords(left).length + tokenizeWords(right).length, 20);
+      const betterScore = score > best.score;
+      const tieForLeft = score === best.score && extracted.leftMatched && !best.leftMatched;
+      if (betterScore || tieForLeft) {
+        best = { answer: restoreCasing(extracted.text, sentence), score, leftMatched: extracted.leftMatched };
+      }
+    });
   });
   return best.answer;
 }

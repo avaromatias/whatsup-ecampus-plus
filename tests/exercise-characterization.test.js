@@ -134,6 +134,42 @@ test('Situation matching chooses a full option, then extracts a cased gap from s
   assert.equal(exercise.answerFromScript(script, 'unrelated', 'context', []), '');
 });
 
+test('Situation matching stays inside the sentence and prefers a matched left context', () => {
+  const { exercise } = loadExercise();
+  const leading = 'Sort of, I guess. What I know for sure is that I am designing my own dress.';
+  assert.equal(
+    exercise.answerFromScript(
+      [{ line: leading }],
+      '',
+      'I know for sure is that I am designing my own dress.',
+      []
+    ),
+    'What'
+  );
+
+  assert.equal(
+    exercise.answerFromScript(
+      [{ line: 'So the dress' }, { line: 'else is the dress' }],
+      'something else',
+      'the dress',
+      []
+    ),
+    'is'
+  );
+
+  const doubled = 'Sorry to hear that the very long list of extra words keeps going here. The reason why I say this.';
+  assert.equal(exercise.answerFromScript([{ line: doubled }], 'The', 'why I say this', []), 'reason');
+  assert.equal(
+    exercise.answerFromScript(
+      [{ line: 'the very long list of extra words keeps going here the reason why I say this' }],
+      'the',
+      'why I say this',
+      []
+    ),
+    'reason'
+  );
+});
+
 test('Situation matching preserves apostrophes, punctuation fallback, and empty scripts', () => {
   const { exercise } = loadExercise();
   const script = [{ line: 'Don’t Stop, BELIEVING now!' }];
