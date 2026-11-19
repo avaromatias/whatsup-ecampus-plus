@@ -110,10 +110,18 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     return text.length >= 8;
   }
 
+  function isSpeechChrome(value) {
+    return /record your voice|listen to the following sentences|listen to the sentences again/i.test(value);
+  }
+
+  function selectSpeechStatements(values) {
+    return (values || []).map(normalize).filter((text) => isCleanSpeechStatement(text) && !isSpeechChrome(text));
+  }
+
   function mergeSpeechStatements(incoming, current) {
-    const cleanIncoming = (incoming || []).map(normalize).filter(isCleanSpeechStatement);
+    const cleanIncoming = selectSpeechStatements(incoming);
     if (cleanIncoming.length) return cleanIncoming;
-    const cleanCurrent = (current || []).map(normalize).filter(isCleanSpeechStatement);
+    const cleanCurrent = selectSpeechStatements(current);
     if (cleanCurrent.length) return cleanCurrent;
     return (incoming || []).map(normalize).filter(Boolean);
   }
@@ -490,13 +498,14 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     const seen = new Set();
     const push = (value) => {
       const text = normalize(String(value || '').split(/Listen:/i)[0]);
-      if (!isCleanSpeechStatement(text) || seen.has(text)) return;
+      if (!isCleanSpeechStatement(text) || isSpeechChrome(text) || seen.has(text)) return;
       seen.add(text);
       statements.push(text);
     };
 
     const blocks = deepFindAll((el) => el.matches?.('app-snack-element'));
-    blocks.forEach((block) => push(block.innerText || block.textContent));
+    const leaves = blocks.filter((block) => !block.querySelector?.('app-snack-element'));
+    leaves.forEach((block) => push(block.innerText || block.textContent));
 
     if (statements.length) return statements;
 
@@ -507,7 +516,6 @@ import { createSituationPanel } from './exercise/situation-panel.js';
 
   function captureSpeechStatementsIfPresent() {
     if (!isSpeechLabRecordPage()) return;
-    if (state.speechStatements.some(isCleanSpeechStatement)) return;
     const statements = scrapeSpeechStatementsFromDom();
     if (!statements.length) return;
     saveHelpersCache({
