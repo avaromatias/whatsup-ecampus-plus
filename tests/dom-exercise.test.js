@@ -6,7 +6,7 @@ const { JSDOM } = require('jsdom');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'dist', 'exercise.js'), 'utf8');
 
-function loadExercise(markup, page = 'PAGE') {
+function loadExercise(markup, page = 'PAGE', prepare) {
   const dom = new JSDOM(markup, {
     url: `https://ecampus.whatsup.es/snacks/COURSE/${page}`,
     runScripts: 'outside-only'
@@ -27,6 +27,7 @@ function loadExercise(markup, page = 'PAGE') {
   };
 
   // Only the trusted local content script runs; no resource loading or page JS.
+  if (prepare) prepare(window);
   window.eval(source);
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
@@ -397,6 +398,78 @@ test('Speech Lab completion buttons apply bridge-delivered statements and teardo
     assert.equal(app.document.querySelector('#wuep-complete-all'), null);
     assert.equal(app.document.querySelectorAll('snack-gap > input').length, 2);
     assert.equal(first.value, 'The first sentence.');
+  } finally {
+    app.close();
+  }
+});
+
+test('Speech Lab auto-complete keeps each box on its own record-page sentence', () => {
+  const sentences = [
+    'It is the number of people he wants to invite that will make the party expensive.',
+    "What I'd like you to do is book the florist.",
+    'The reason I\'ve booked an extra car is in case people get left behind.',
+    'What we need to work on next is the production timetable.',
+    'The arrival of the big day is what I\'m most excited about.',
+    'The place where I grew up is about 10 miles from here.',
+    'The reason why we should start planning next year\'s events is that venues tend to get booked early.',
+    'It is the invitations that you should be working on now.',
+    'It was in December that we had our last event.',
+    'Is it Carol who is in charge of the vendors?'
+  ];
+  const polluted = [
+    `Speech Lab Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${sentences[0]}`,
+    `Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${sentences[0]}`,
+    ...sentences
+  ];
+  const boxes = sentences.map(() => '<snack-gap><textarea></textarea></snack-gap>').join('');
+  const app = loadExercise(`<main><form>${boxes}</form></main>`, 'NC_SPEECHLAB_110', (window) => {
+    window.sessionStorage.setItem('wuep_helpers:COURSE', JSON.stringify({
+      snackId: 'COURSE', situationScript: [], speechStatements: polluted
+    }));
+  });
+  try {
+    app.flush();
+    const areas = [...app.document.querySelectorAll('textarea')];
+    app.document.querySelector('.wuep-complete-one').click();
+    assert.equal(areas[0].value, sentences[0]);
+    app.document.querySelectorAll('.wuep-complete-one')[9].click();
+    assert.equal(areas[9].value, sentences[9]);
+    areas.forEach((area) => { area.value = ''; });
+    app.document.querySelector('#wuep-complete-all').click();
+    assert.deepEqual(areas.map((area) => area.value), sentences);
+  } finally {
+    app.close();
+  }
+});
+
+test('Speech Lab record page stores the sentence elements and not their ancestors', () => {
+  const first = 'It is the number of people he wants to invite that will make the party expensive.';
+  const second = "What I'd like you to do is book the florist.";
+  const app = loadExercise(`<main>
+    <app-snack-element>
+      Speech Lab Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${first}
+      <app-snack-element>
+        Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${first}
+        <app-snack-element>${first}</app-snack-element>
+      </app-snack-element>
+      <app-snack-element>${second}</app-snack-element>
+    </app-snack-element>
+  </main>`, 'NC_SPEECHLAB_110_LAB', (window) => {
+    window.sessionStorage.setItem('wuep_helpers:COURSE', JSON.stringify({
+      snackId: 'COURSE',
+      situationScript: [],
+      speechStatements: [
+        `Speech Lab Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${first}`,
+        `Listen to the following sentences and record your voice repeating them to practise your pronunciation. ${first}`,
+        first,
+        second
+      ]
+    }));
+  });
+  try {
+    app.flush();
+    const stored = JSON.parse(app.window.sessionStorage.getItem('wuep_helpers:COURSE'));
+    assert.deepEqual(stored.speechStatements, [first, second]);
   } finally {
     app.close();
   }
