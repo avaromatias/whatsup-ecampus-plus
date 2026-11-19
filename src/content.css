@@ -264,3 +264,22 @@
 .wuep-native-hidden {
   display: none !important;
 }
+
+/* The column's button-wrapper rule is scoped to Angular, so the flex alignment
+   is repeated here. The 4px gap matches Launch unit / All units on /home. */
+.wuep-calendar-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+ion-button.wuep-calendar {
+  --background: #4285f4;
+  --background-hover: #1a73e8;
+  --background-activated: #1a73e8;
+  --background-focused: #4285f4;
+  --color: #fff;
+  --color-hover: #fff;
+  --ripple-color: #fff;
+}

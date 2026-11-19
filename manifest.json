@@ -9,7 +9,9 @@
   "content_scripts": [
     {
       "matches": [
-        "https://ecampus.whatsup.es/Api/ScheduleAClass*"
+        "https://ecampus.whatsup.es/Api/ScheduleAClass*",
+        "https://ecampus.whatsup.es/home",
+        "https://ecampus.whatsup.es/home/"
       ],
       "js": [
         "src/content.js"

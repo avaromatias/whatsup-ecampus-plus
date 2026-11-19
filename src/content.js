@@ -37,6 +37,14 @@
   let lastAppliedSignature = '';
 
   const isSchedulePage = () => /\/Api\/ScheduleAClass(?:School|Live|Ff|Hf)?$/i.test(location.pathname);
+  const isCalendarPage = () => isSchedulePage() || /^\/home\/?$/i.test(location.pathname);
+
+  const MONTHS = {
+    january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+    july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
+  };
+  const CLASS_MINUTES = 60;
+  const SCHOOL_LOCATION = "What's Up!, Rambla Just Oliveras, 53, 08901 L'Hospitalet de Llobregat, Barcelona";
 
   function normalizeText(value) {
     return (value || '').replace(/\s+/g, ' ').trim();
@@ -97,6 +105,127 @@
 
   function inferClassType(title) {
     return /face to face/i.test(title) ? 'face' : 'havefun';
+  }
+
+  function madridDateParts(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Madrid',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(date);
+    const value = (type) => Number(parts.find((part) => part.type === type)?.value);
+    return { year: value('year'), month: value('month'), day: value('day') };
+  }
+
+  function eventYear(month, day) {
+    const today = madridDateParts();
+    const past = month < today.month || (month === today.month && day < today.day);
+    return past ? today.year + 1 : today.year;
+  }
+
+  function addMinutes(parts, minutes) {
+    const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute + minutes));
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      hour: date.getUTCHours(),
+      minute: date.getUTCMinutes()
+    };
+  }
+
+  function calendarStamp(parts) {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${parts.year}${pad(parts.month)}${pad(parts.day)}T${pad(parts.hour)}${pad(parts.minute)}00`;
+  }
+
+  function isConfirmedClass(row) {
+    return Array.from(row.querySelectorAll('ion-button, button, a')).some((control) => {
+      const label = normalizeText(control.textContent || control.getAttribute?.('aria-label'));
+      return /^cancel class\b/i.test(label);
+    });
+  }
+
+  function isInPersonClass(heading) {
+    if (/\/Api\/ScheduleAClassLive$/i.test(location.pathname)) return false;
+    if (/\/Api\/ScheduleAClassSchool$/i.test(location.pathname)) return true;
+    return /face-to-face/i.test(heading);
+  }
+
+  function parseClassEvent(row) {
+    const heading = normalizeText(row.querySelector('h3.sr-only')?.textContent);
+    const title = extractTitle(row);
+    const match = heading.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,\s*(\d{1,2}):(\d{2})\b/i);
+    if (!title || !match) return null;
+
+    const month = MONTHS[match[1].toLowerCase()];
+    const start = {
+      year: eventYear(month, Number(match[2])),
+      month,
+      day: Number(match[2]),
+      hour: Number(match[3]),
+      minute: Number(match[4])
+    };
+    return {
+      title,
+      start,
+      end: addMinutes(start, CLASS_MINUTES),
+      location: isInPersonClass(heading) ? SCHOOL_LOCATION : ''
+    };
+  }
+
+  function calendarUrl(event) {
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title,
+      dates: `${calendarStamp(event.start)}/${calendarStamp(event.end)}`,
+      ctz: 'Europe/Madrid'
+    });
+    if (event.location) params.set('location', event.location);
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  }
+
+  function removeCalendarButtons() {
+    document.querySelectorAll('.wuep-calendar-wrap, .wuep-calendar').forEach((button) => button.remove());
+  }
+
+  function syncCalendarButtons() {
+    if (!state.enabled || !isCalendarPage()) {
+      removeCalendarButtons();
+      return;
+    }
+
+    getRows().forEach((row) => {
+      row.querySelectorAll('a.wuep-calendar').forEach((link) => link.remove());
+      const existing = row.querySelector('ion-button.wuep-calendar');
+      const event = isConfirmedClass(row) ? parseClassEvent(row) : null;
+      if (!event) {
+        existing?.closest('.wuep-calendar-wrap')?.remove();
+        existing?.remove();
+        return;
+      }
+
+      const href = calendarUrl(event);
+      const label = `Add ${event.title} to Google Calendar`;
+      if (existing) {
+        if (existing.getAttribute('href') !== href) existing.setAttribute('href', href);
+        if (existing.getAttribute('aria-label') !== label) existing.setAttribute('aria-label', label);
+        return;
+      }
+
+      const host = row.querySelector('.buttons') || row;
+      // Parsed HTML upgrades ion-button in the page registry. createElement from
+      // the content-script world would leave an unstyled unknown element.
+      host.insertAdjacentHTML(
+        'beforeend',
+        '<div class="button-wrapper wuep-calendar-wrap"><ion-button class="ion-text-wrap wuep-calendar" expand="full" size="extended" target="_blank" rel="noopener noreferrer" style="text-transform: none"></ion-button></div>'
+      );
+      const button = host.querySelector('ion-button.wuep-calendar');
+      button.textContent = 'Add to calendar';
+      button.setAttribute('href', href);
+      button.setAttribute('aria-label', label);
+    });
   }
 
   function dayIsSelected(dayFull) {
@@ -537,6 +666,7 @@
 
   function renderEnabledState() {
     const { panel, trigger } = panelAndTrigger();
+    syncCalendarButtons();
 
     if (!state.enabled || !isSchedulePage()) {
       closePanel();
@@ -553,6 +683,7 @@
   }
 
   function mountScheduleUI() {
+    syncCalendarButtons();
     if (!isSchedulePage()) return;
     buildPanel();
     buildTrigger();
@@ -636,7 +767,7 @@
 
         if (typeof result?.[ENABLED_KEY] === 'boolean') state.enabled = result[ENABLED_KEY];
 
-        buildPanel();
+        if (isSchedulePage()) buildPanel();
         attachGlobalListeners();
         startObserver();
         startPathWatcher();

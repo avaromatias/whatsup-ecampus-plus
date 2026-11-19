@@ -22,6 +22,7 @@ The extension UI is injected only on:
 - `/Api/ScheduleAClass`
 - `/Api/ScheduleAClassSchool`
 - `/Api/ScheduleAClassLive`
+- `/home` (confirmed-class calendar links only)
 
 ### Snacks module
 
@@ -38,6 +39,7 @@ The extension UI is injected only on:
   - Time Range (`09:30` to `21:30`, default full range)
 - Applies client-side filtering to natively visible schedule rows.
 - Keeps native delivery filters (`School`, `Live`) as the source of truth.
+- Adds an **Add to calendar** button under **Cancel class** on a confirmed row, on the schedule pages and on `/home`. It is the same extended ion-button as Cancel class, colored with the Google Calendar blue. The link opens Google's public event template for whoever is signed in. The title and start time come from the row, the event lasts 60 minutes, and a School / face-to-face class includes the L'Hospitalet school address.
 - Provides a popup toggle (**Enable on this site**) for runtime on/off.
 
 ### Snacks UX

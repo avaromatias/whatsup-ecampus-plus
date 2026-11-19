@@ -12,7 +12,7 @@ test('manifest preserves page-world bridge order and isolated timing with the bu
   assert.deepEqual(manifest.content_scripts.map(({ matches, js, run_at, world }) => ({
     matches, js, run_at, world: world || 'ISOLATED'
   })), [
-    { matches: ['https://ecampus.whatsup.es/Api/ScheduleAClass*'], js: ['src/content.js'], run_at: 'document_idle', world: 'ISOLATED' },
+    { matches: ['https://ecampus.whatsup.es/Api/ScheduleAClass*', 'https://ecampus.whatsup.es/home', 'https://ecampus.whatsup.es/home/'], js: ['src/content.js'], run_at: 'document_idle', world: 'ISOLATED' },
     { matches: ['https://ecampus.whatsup.es/snacks/*'], js: ['src/snack-extract.js', 'src/exercise-bridge.js'], run_at: 'document_start', world: 'MAIN' },
     { matches: ['https://ecampus.whatsup.es/*'], js: ['dist/exercise.js'], run_at: 'document_idle', world: 'ISOLATED' }
   ]);
