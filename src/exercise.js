@@ -27,7 +27,7 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     situationGapItems: []
   };
 
-  const reorderMode = createReorderMode({ document, getStorage: () => localStorage, pathname: location.pathname, readInputText, setInputValue });
+  const reorderMode = createReorderMode({ document, getStorage: () => localStorage, getPathname: () => location.pathname, readInputText, setInputValue });
   const wordListMode = createWordListMode({ document, deepFindAll, findInputs, readInputText, setInputValue, setCaretToEnd, isEnabled: () => state.enabled });
   const rewriteMode = createRewriteMode({ document, hasWordList: () => wordListMode.findWords().length > 0, readInputText, setInputValue });
   const situationPanel = createSituationPanel({ document, window, getStorage: () => sessionStorage });

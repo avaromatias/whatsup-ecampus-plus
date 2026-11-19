@@ -127,6 +127,36 @@ test('reorder chips retain punctuation/casing, persist drag order, and clean up 
   }
 });
 
+test('reorder keys storage by the mounted route and rejects a same-length foreign bank', () => {
+  const prompt = '. traffic | was | got | What | stuck | happened | in | we';
+  const base = ['traffic', 'was', 'got', 'What', 'stuck', 'happened', 'in', 'we'];
+  const app = loadExercise(reorderMarkup(prompt));
+  try {
+    const input = app.document.querySelector('input');
+    input.value = "complain isn't most It the children who the";
+    app.window.localStorage.setItem(
+      'wuep_reorder_state:/snacks/COURSE/PAGE',
+      JSON.stringify({ 0: ['complain', "isn't", 'most', 'It', 'the', 'children', 'who', 'the'] })
+    );
+    app.flush();
+    assert.deepEqual(
+      Array.from(app.document.querySelector('.wuep-reorder-bank').children, (chip) => chip.textContent),
+      base
+    );
+    assert.equal(input.value, 'Traffic was got What stuck happened in we');
+
+    app.window.history.pushState({}, '', '/snacks/COURSE/OTHER');
+    app.enabled(false);
+    app.enabled(true);
+    assert.deepEqual(
+      JSON.parse(app.window.localStorage.getItem('wuep_reorder_state:/snacks/COURSE/OTHER')),
+      { 0: base }
+    );
+  } finally {
+    app.close();
+  }
+});
+
 test('reorder preserves an existing answer over stored tokens without input events', () => {
   const app = loadExercise(reorderMarkup('alpha | beta | gamma'));
   try {

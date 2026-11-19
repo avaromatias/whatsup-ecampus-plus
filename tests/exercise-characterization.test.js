@@ -96,7 +96,7 @@ function fakeReorderContainer(input) {
   };
 }
 
-test('reorder persistence is keyed by the initial path and tolerates corrupt storage', () => {
+test('reorder persistence is keyed by the mounted path and tolerates corrupt storage', () => {
   const containers = [];
   const harness = loadExercise('/snacks/COURSE/ONE', { boot: true, containers });
   containers.push(fakeReorderContainer(new harness.Input()));
@@ -107,7 +107,9 @@ test('reorder persistence is keyed by the initial path and tolerates corrupt sto
   harness.change({ wuep_enabled: { newValue: false } });
   harness.change({ wuep_enabled: { newValue: true } });
   harness.flush();
-  assert.equal(harness.values.has('local:wuep_reorder_state:/snacks/COURSE/TWO'), false);
+  assert.deepEqual(JSON.parse(harness.values.get('local:wuep_reorder_state:/snacks/COURSE/TWO')),
+    { 0: ['hello', 'world'] });
+  harness.location.pathname = '/snacks/COURSE/ONE';
   harness.values.set('local:wuep_reorder_state:/snacks/COURSE/ONE', '{bad json');
   harness.change({ wuep_enabled: { newValue: false } });
   harness.change({ wuep_enabled: { newValue: true } });

@@ -9,10 +9,23 @@ import {
 
 const INPUT_SELECTOR = 'snack-gap .input[contenteditable="true"], snack-gap [contenteditable="true"], snack-gap input[type="text"], snack-gap textarea';
 
-export function createReorderMode({ document, getStorage, pathname, readInputText, setInputValue }) {
-  // Capture the route once, as the original content script did before SPA navigation.
-  const storageKey = `wuep_reorder_state:${pathname}`;
+export function createReorderMode({ document, getStorage, getPathname, readInputText, setInputValue }) {
   let items = [];
+
+  function storageKey() {
+    return `wuep_reorder_state:${getPathname()}`;
+  }
+
+  function isPermutation(candidate, base) {
+    if (!Array.isArray(candidate) || candidate.length !== base.length) return false;
+    const pool = base.map((token) => token.toLowerCase());
+    return candidate.every((token) => {
+      const index = pool.indexOf(String(token).toLowerCase());
+      if (index < 0) return false;
+      pool.splice(index, 1);
+      return true;
+    });
+  }
 
   function findItems() {
     return Array.from(document.querySelectorAll('.fill-container'))
@@ -26,7 +39,7 @@ export function createReorderMode({ document, getStorage, pathname, readInputTex
 
   function loadPersisted() {
     try {
-      const parsed = JSON.parse(getStorage().getItem(storageKey) || '{}');
+      const parsed = JSON.parse(getStorage().getItem(storageKey()) || '{}');
       return parsed && typeof parsed === 'object' ? parsed : {};
     } catch {
       return {};
@@ -39,7 +52,7 @@ export function createReorderMode({ document, getStorage, pathname, readInputTex
       items.forEach((item) => {
         payload[item.id] = item.tokens;
       });
-      getStorage().setItem(storageKey, JSON.stringify(payload));
+      getStorage().setItem(storageKey(), JSON.stringify(payload));
     } catch {
       // ignore
     }
@@ -156,15 +169,13 @@ export function createReorderMode({ document, getStorage, pathname, readInputTex
       const inputExistingValue = readInputText(inputEl);
       const existingTokens = inputExistingValue ? parseInputTokens(inputExistingValue) : null;
 
-      const hasSameTokenCount = (candidate) => Array.isArray(candidate) && candidate.length === baseTokens.length;
-
       let tokens = baseTokens;
       let keepCurrentInput = false;
 
-      if (hasSameTokenCount(existingTokens)) {
+      if (isPermutation(existingTokens, baseTokens)) {
         tokens = remapWithBaseCasing(existingTokens, baseTokens);
         keepCurrentInput = true;
-      } else if (hasSameTokenCount(savedTokens)) {
+      } else if (isPermutation(savedTokens, baseTokens)) {
         tokens = remapWithBaseCasing(savedTokens, baseTokens);
       }
 
