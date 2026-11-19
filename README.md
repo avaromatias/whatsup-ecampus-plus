@@ -68,7 +68,7 @@ The extension UI is injected only on:
 - Starts hidden. A bottom-right FAB opens the script; **Hide** closes it completely.
 - The header can be dragged to move the panel (full or collapsed). **Collapse** keeps only the header.
 - Leaves the page when you exit Situation or reach the native SCRIPT page.
-- On gap/combo pages, **Auto-complete all** and the wand at the end of each sentence fill missing words from the script. True/false stays manual.
+- On gap/combo pages, **Auto-complete all** and the wand at the end of each sentence fill missing words from the script. On true/false pages, the same controls select the stored answer by its submitted value, even when the visible label is swapped.
 
 #### Speech Lab dictation helper
 
@@ -146,7 +146,7 @@ Class type is inferred from row title:
   - Reload the extension and hard-refresh (`Ctrl+F5`) the snack.
 
 - **Situation wand stays disabled.**
-  - Only gap text that also appears in the written script can be filled. True/false is never auto-answered.
+  - Only gap text that also appears in the written script can be filled. True/false uses the stored answer value, not the visible label.
 
 - **Speech Lab dictation stays empty.**
   - Visit page 1 first, then go to page 2. Recording is not required.

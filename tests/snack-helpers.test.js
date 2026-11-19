@@ -74,7 +74,27 @@ test('speech fallback reads first valid answer from non-lab Speech Lab nodes', (
   }] });
 
   assert.deepEqual(plain(helpers.speechStatements), ['First answer', 'Second answer']);
-  assert.deepEqual(plain(extract(null)), { snackId: '', situationScript: [], speechStatements: [] });
+  assert.deepEqual(plain(extract(null)), {
+    snackId: '', situationScript: [], speechStatements: [], trueFalseValues: {}, trueFalseAnswers: []
+  });
+});
+
+test('situation true or false keeps submitted booleans and the visible-label map', () => {
+  const extract = loadExtractor();
+  const helpers = extract({ snackId: 'SITUATION', children: [
+    { data: { trueFalseValues: { true: 'False', false: 'True' } } },
+    { type: 'trueOrFalse', snackId: 'NC_VIDEO_110_SNACK1_0', data: {
+      statement: 'The dress is ready.',
+      validAndStudentAnswers: [{ validAnswers: [{ value: false }] }]
+    } },
+    { type: 'trueOrFalse', data: {
+      validAndStudentAnswers: [{ validAnswers: [{ value: true }] }]
+    } }
+  ] });
+
+  assert.deepEqual(plain(helpers.trueFalseValues), { true: 'False', false: 'True' });
+  assert.deepEqual(plain(helpers.trueFalseAnswers), [false, true]);
+  assert.deepEqual(plain(helpers.speechStatements), []);
 });
 
 test('fetch launch capture persists and posts helpers without replacing the response', async () => {

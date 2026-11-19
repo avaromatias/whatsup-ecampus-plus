@@ -183,14 +183,18 @@ test('helpers cache keeps prior script and clean Speech Lab statements when a la
   const harness = loadExercise('/snacks/COURSE/VIDEO_SNACK');
   harness.exercise.saveHelpersCache({
     snackId: 'COURSE', situationScript: [{ speaker: 'Alex', line: 'Hello there' }],
-    speechStatements: ['Practice this sentence']
+    speechStatements: ['Practice this sentence'],
+    trueFalseValues: { true: 'False', false: 'True' },
+    trueFalseAnswers: [false]
   });
   harness.exercise.saveHelpersCache({
     snackId: 'COURSE', situationScript: [], speechStatements: ['Listen: noise', 'short']
   });
   assert.deepEqual(plain(harness.exercise.loadHelpersCache()), {
     snackId: 'COURSE', situationScript: [{ speaker: 'Alex', line: 'Hello there' }],
-    speechStatements: ['Practice this sentence']
+    speechStatements: ['Practice this sentence'],
+    trueFalseValues: { true: 'False', false: 'True' },
+    trueFalseAnswers: [false]
   });
   assert.equal(harness.exercise.state.situationScript[0].line, 'Hello there');
 });

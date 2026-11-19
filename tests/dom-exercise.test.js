@@ -535,6 +535,45 @@ test('Speech Lab record page stores the sentence elements and not their ancestor
   }
 });
 
+test('true or false selects the submitted value when the visible label is inverted', () => {
+  const app = loadExercise(`
+    <main><form>
+      <div role="radiogroup">
+        <label><input type="radio" name="q1" value="true" aria-label="False"></label>
+        <label><input type="radio" name="q1" value="false" aria-label="True"></label>
+      </div>
+      <div role="radiogroup">
+        <label><input type="radio" name="q2" value="true" aria-label="False"></label>
+        <label><input type="radio" name="q2" value="false" aria-label="True"></label>
+      </div>
+    </form></main>`, 'NC_VIDEO_110_SNACK1');
+  try {
+    app.window.dispatchEvent(new app.window.MessageEvent('message', {
+      source: app.window,
+      data: {
+        source: 'wuep-ecampus-plus', type: 'snack-helpers',
+        helpers: {
+          snackId: 'COURSE',
+          situationScript: [{ speaker: 'A', line: 'The dress is ready.' }],
+          trueFalseValues: { true: 'False', false: 'True' },
+          trueFalseAnswers: ['True', true]
+        }
+      }
+    }));
+    app.flush();
+    const groups = app.document.querySelectorAll('[role="radiogroup"]');
+    groups[0].querySelector('.wuep-complete-one').click();
+    assert.equal(groups[0].querySelector('input:checked').value, 'false');
+    assert.equal(groups[0].querySelector('input[aria-label="True"]').checked, true);
+
+    app.document.querySelector('#wuep-complete-all').click();
+    assert.equal(groups[0].querySelector('input:checked').value, 'false');
+    assert.equal(groups[1].querySelector('input:checked').value, 'true');
+  } finally {
+    app.close();
+  }
+});
+
 test('Situation script opens from its FAB and completes a contextual gap', () => {
   const app = loadExercise(`
     <main><form><div class="fill-container">

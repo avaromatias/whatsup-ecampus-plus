@@ -196,16 +196,32 @@
     return statements;
   }
 
+  function extractTrueFalse(root) {
+    const answers = [];
+    let values = null;
+    walkSnackNodes(root, (node) => {
+      const data = node?.data || {};
+      if (data.trueFalseValues && typeof data.trueFalseValues === 'object') values = data.trueFalseValues;
+      if (node?.type !== 'trueOrFalse') return;
+      const value = data.validAndStudentAnswers?.[0]?.validAnswers?.[0]?.value;
+      if (typeof value === 'boolean') answers.push(value);
+    });
+    return { trueFalseValues: values || {}, trueFalseAnswers: answers };
+  }
+
   function extractSnackHelpers(launch) {
     const root = launch?.snackExercises || launch;
     if (!root || typeof root !== 'object') {
-      return { snackId: '', situationScript: [], speechStatements: [] };
+      return { snackId: '', situationScript: [], speechStatements: [], trueFalseValues: {}, trueFalseAnswers: [] };
     }
 
+    const trueFalse = extractTrueFalse(root);
     return {
       snackId: String(root.snackId || root.snackID || ''),
       situationScript: extractSituationScript(root),
-      speechStatements: extractSpeechStatements(root)
+      speechStatements: extractSpeechStatements(root),
+      trueFalseValues: trueFalse.trueFalseValues,
+      trueFalseAnswers: trueFalse.trueFalseAnswers
     };
   }
 

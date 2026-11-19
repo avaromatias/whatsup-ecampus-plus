@@ -23,6 +23,8 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     // situation / speech-lab helpers
     situationScript: [],
     speechStatements: [],
+    trueFalseValues: {},
+    trueFalseAnswers: [],
     speechPrefillItems: [],
     situationGapItems: []
   };
@@ -91,10 +93,20 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     if (!key || !helpers) return;
     try {
       const current = loadHelpersCache(snackId || helpers.snackId) || {};
+      const incomingValues = helpers.trueFalseValues;
+      const currentValues = current.trueFalseValues;
+      const trueFalseValues = incomingValues && typeof incomingValues === 'object' && Object.keys(incomingValues).length
+        ? incomingValues
+        : (currentValues && typeof currentValues === 'object' ? currentValues : {});
+      const trueFalseAnswers = Array.isArray(helpers.trueFalseAnswers) && helpers.trueFalseAnswers.length
+        ? helpers.trueFalseAnswers
+        : (Array.isArray(current.trueFalseAnswers) ? current.trueFalseAnswers : []);
       const next = {
         snackId: helpers.snackId || current.snackId || getSnackPathId(),
         situationScript: helpers.situationScript?.length ? helpers.situationScript : current.situationScript || [],
-        speechStatements: mergeSpeechStatements(helpers.speechStatements, current.speechStatements)
+        speechStatements: mergeSpeechStatements(helpers.speechStatements, current.speechStatements),
+        trueFalseValues,
+        trueFalseAnswers
       };
       sessionStorage.setItem(key, JSON.stringify(next));
       applyHelpersCache(next);
@@ -133,6 +145,12 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     }
     if (Array.isArray(helpers.speechStatements) && helpers.speechStatements.length) {
       state.speechStatements = mergeSpeechStatements(helpers.speechStatements, state.speechStatements);
+    }
+    if (helpers.trueFalseValues && typeof helpers.trueFalseValues === 'object' && Object.keys(helpers.trueFalseValues).length) {
+      state.trueFalseValues = helpers.trueFalseValues;
+    }
+    if (Array.isArray(helpers.trueFalseAnswers) && helpers.trueFalseAnswers.length) {
+      state.trueFalseAnswers = helpers.trueFalseAnswers;
     }
   }
 
@@ -316,8 +334,8 @@ import { createSituationPanel } from './exercise/situation-panel.js';
       }
       row.remove();
     });
-    findInputs().forEach((input) => {
-      delete input.dataset.wuepCompleteBound;
+    document.querySelectorAll('[data-wuep-complete-bound]').forEach((el) => {
+      delete el.dataset.wuepCompleteBound;
     });
   }
 
@@ -442,6 +460,54 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     setControlValue(item.control, item.answer);
   }
 
+  function submittedTrueFalseValue(answer) {
+    const labels = state.trueFalseValues || {};
+    const text = typeof answer === 'boolean' ? String(answer) : normalize(String(answer ?? ''));
+    const mapped = Object.entries(labels).find(([, label]) => normalize(String(label)) === text);
+    if (typeof answer === 'boolean') return text;
+    if (mapped) return mapped[0];
+    if (text === 'true' || text === 'false') return text;
+    return '';
+  }
+
+  function selectRadio(input) {
+    const name = input.getAttribute('name');
+    const scope = input.closest('[role="radiogroup"]') || input.form || document;
+    scope.querySelectorAll('input[type="radio"]').forEach((el) => {
+      if (!name || el.getAttribute('name') === name) el.checked = el === input;
+    });
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function selectTrueFalseAnswers() {
+    document.querySelectorAll('[role="radiogroup"]').forEach((group, index) => {
+      const value = submittedTrueFalseValue(state.trueFalseAnswers[index]);
+      if (!value) return;
+      const input = group.querySelector(`input[type="radio"][value="${value}"]`);
+      if (input) selectRadio(input);
+    });
+  }
+
+  function mountTrueFalse() {
+    if (!isSituationQuestionPage()) return false;
+    if (!state.trueFalseAnswers.length) applyHelpersCache(loadHelpersCache());
+    if (!state.trueFalseAnswers.length) return false;
+    const groups = [...document.querySelectorAll('[role="radiogroup"]')];
+    if (!groups.length) return false;
+
+    groups.forEach((group, index) => {
+      const value = submittedTrueFalseValue(state.trueFalseAnswers[index]);
+      if (!value) return;
+      const input = group.querySelector(`input[type="radio"][value="${value}"]`);
+      if (!input) return;
+      mountControlCompleteButton(input, () => selectRadio(input), true);
+    });
+
+    ensureCompleteAllButton(() => selectTrueFalseAnswers());
+    return true;
+  }
+
   function mountSituationAutocomplete() {
     const controls = findSituationFillControls();
     if (!controls.length || !state.situationScript.length) {
@@ -458,6 +524,7 @@ import { createSituationPanel } from './exercise/situation-panel.js';
 
     ensureCompleteAllButton(() => {
       state.situationGapItems.forEach(applySituationGap);
+      selectTrueFalseAnswers();
     });
     return true;
   }
@@ -480,6 +547,7 @@ import { createSituationPanel } from './exercise/situation-panel.js';
     situationPanel.mount(state.situationScript);
 
     mountSituationAutocomplete();
+    mountTrueFalse();
     state.mode = 'situation-script';
     window.__wuepExerciseProbe = 'snacks-mounted-situation-script';
     return true;
@@ -602,6 +670,7 @@ import { createSituationPanel } from './exercise/situation-panel.js';
 
     const mountedSpeech = mountSpeechLabPrefill();
     const mountedScript = mountSituationScriptPanel();
+    if (!mountedScript) mountTrueFalse();
 
     if (mountedSpeech) {
       state.bootstrapped = true;
