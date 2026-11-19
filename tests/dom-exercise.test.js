@@ -157,6 +157,36 @@ test('reorder keys storage by the mounted route and rejects a same-length foreig
   }
 });
 
+test('reorder rebuilds chips when the gap text is edited into the same words', () => {
+  const app = loadExercise(reorderMarkup('on | Tuesday | last | was | her | I | saw | It | that'));
+  try {
+    const input = app.document.querySelector('input');
+    app.flush();
+    const chips = () => Array.from(
+      app.document.querySelector('.wuep-reorder-bank').children,
+      (chip) => chip.textContent
+    );
+    assert.deepEqual(chips(), ['on', 'Tuesday', 'last', 'was', 'her', 'I', 'saw', 'It', 'that']);
+
+    input.value = 'It was on Tuesday that I last saw her';
+    input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    const edited = ['It', 'was', 'on', 'Tuesday', 'that', 'I', 'last', 'saw', 'her'];
+    assert.deepEqual(chips(), edited);
+    assert.equal(input.value, 'It was on Tuesday that I last saw her');
+    assert.deepEqual(
+      JSON.parse(app.window.localStorage.getItem('wuep_reorder_state:/snacks/COURSE/PAGE')),
+      { 0: edited }
+    );
+
+    input.value = 'something else entirely here now';
+    input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
+    assert.deepEqual(chips(), edited);
+    assert.equal(input.value, 'something else entirely here now');
+  } finally {
+    app.close();
+  }
+});
+
 test('reorder preserves an existing answer over stored tokens without input events', () => {
   const app = loadExercise(reorderMarkup('alpha | beta | gamma'));
   try {

@@ -43,8 +43,15 @@ function loadExercise(pathname = '/snacks/COURSE/PAGE', { boot = false, enabled 
     disconnect() {}
   }
   class Input {
-    constructor() { this.value = ''; this.events = []; this.isConnected = true; }
-    dispatchEvent(event) { this.events.push(event.type); }
+    constructor() { this.value = ''; this.events = []; this.listeners = {}; this.isConnected = true; }
+    addEventListener(name, listener) { (this.listeners[name] ||= []).push(listener); }
+    removeEventListener(name, listener) {
+      this.listeners[name] = (this.listeners[name] || []).filter((item) => item !== listener);
+    }
+    dispatchEvent(event) {
+      this.events.push(event.type);
+      (this.listeners[event.type] || []).slice().forEach((listener) => listener(event));
+    }
     setSelectionRange() {}
   }
   const context = {

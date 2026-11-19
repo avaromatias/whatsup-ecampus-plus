@@ -62,6 +62,22 @@ export function createReorderMode({ document, getStorage, getPathname, readInput
     setInputValue(item.inputEl, toSentence(item.tokens));
   }
 
+  function syncFromInput(item) {
+    const parsed = parseInputTokens(readInputText(item.inputEl));
+    if (!isPermutation(parsed, item.baseTokens)) return;
+    const next = remapWithBaseCasing(parsed, item.baseTokens);
+    if (next.join('\0') === item.tokens.join('\0')) return;
+    item.tokens = next;
+    renderBank(item);
+    savePersisted();
+  }
+
+  function bindInputSync(item) {
+    const onInput = () => syncFromInput(item);
+    item.inputEl.addEventListener('input', onInput);
+    item.onInput = onInput;
+  }
+
   function readDragSource(event, item) {
     let payload = null;
     try {
@@ -199,10 +215,11 @@ export function createReorderMode({ document, getStorage, getPathname, readInput
         }
       }
 
-      return { id, container, textEl, inputEl, bankEl, tokens, keepCurrentInput };
+      return { id, container, textEl, inputEl, bankEl, tokens, baseTokens, keepCurrentInput };
     });
 
     items.forEach((item) => {
+      bindInputSync(item);
       renderBank(item);
       if (!item.keepCurrentInput) {
         applyItemToInput(item);
@@ -218,6 +235,7 @@ export function createReorderMode({ document, getStorage, getPathname, readInput
 
   function unmount() {
     items.forEach((item) => {
+      if (item.onInput) item.inputEl?.removeEventListener('input', item.onInput);
       item.container?.classList?.remove('wuep-reorder-container');
 
       if (item.textEl) {

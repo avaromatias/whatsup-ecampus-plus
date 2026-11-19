@@ -57,7 +57,9 @@ export function remapWithBaseCasing(candidateTokens, baseTokens) {
   return candidateTokens.map((token) => {
     const key = token.toLowerCase();
     const pool = pools.get(key);
-    if (pool && pool.length) return pool.shift();
-    return token;
+    if (!pool?.length) return token;
+    const exact = pool.findIndex((item) => item === token);
+    if (exact >= 0) return pool.splice(exact, 1)[0];
+    return pool.shift();
   });
 }
